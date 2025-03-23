@@ -1,0 +1,18 @@
+[package]
+name = "hfendpoints-transports-axum"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = { version = "0.8", features = ["multipart"] }
+serde = { version = "1.0", features = ["derive"] }
+pyo3 = { version = "0.24.0", optional = true, features = ["abi3-py312"] }
+utoipa = "5.3"
+utoipa-axum = "0.2"
+
+[dev-dependencies]
+serde_json = "1.0"
+
+[features]
+default = []
+python = ["pyo3"]

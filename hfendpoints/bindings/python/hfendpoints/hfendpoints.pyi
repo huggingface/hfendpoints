@@ -1,0 +1,2 @@
+class Endpoint:
+    pass

@@ -1,0 +1,6 @@
+[workspace]
+resolver = "3"
+members = ["hfendpoints", "hfendpoints-transports", "hfendpoints-transports-axum"]
+
+[workspace.dependencies]
+pyo3 = { version = "0.24.0", features = ["abi3-py312"] }

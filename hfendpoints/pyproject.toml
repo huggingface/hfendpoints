@@ -1,0 +1,22 @@
+[project]
+name = "hfendpoints"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Morgan Funtowicz", email = "funtowiczmo@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+hfendpoints = "hfendpoints:main"
+
+[tool.maturin]
+module-name = "hfendpoints"
+python-packages = ["bindings/python"]
+features = ["pyo3/extension-module"]
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"

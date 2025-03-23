@@ -1,0 +1,13 @@
+[package]
+name = "hfendpoints"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hfendpoints-transports = { path = "../hfendpoints-transports" }
+hfendpoints-transports-axum = { path = "../hfendpoints-transports-axum" }
+pyo3 = { workspace = true, optional = true, features = ["extension-module"] }
+
+[features]
+default = []
+python = ["pyo3", "hfendpoints-transports/python", "hfendpoints-transports-axum/python"]
