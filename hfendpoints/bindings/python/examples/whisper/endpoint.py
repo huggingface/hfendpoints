@@ -1,4 +1,6 @@
-from hfendpoints import Endpoint
+# from hfendpoints import Endpoint
 
 if __name__ == "__main__":
-    print("Hello")
+    import hfendpoints
+
+    print(dir(hfendpoints.hfendpoints.openai))

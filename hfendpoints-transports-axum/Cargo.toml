@@ -5,8 +5,11 @@ edition = "2024"
 
 [dependencies]
 axum = { version = "0.8", features = ["multipart"] }
-serde = { version = "1.0", features = ["derive"] }
+#hfendpoints-transports = { path = "../hfendpoints-transports" }
 pyo3 = { version = "0.24.0", optional = true, features = ["abi3-py312"] }
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
+tokio = { version = "1.40", features = ["net", "parking_lot"] }
 utoipa = "5.3"
 utoipa-axum = "0.2"
 

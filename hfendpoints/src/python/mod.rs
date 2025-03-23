@@ -6,13 +6,17 @@ use pyo3::prelude::*;
 #[pyo3(name = "Endpoint")]
 pub struct PyEndpoint {}
 
-impl Endpoint for PyEndpoint {}
+// impl Endpoint for PyEndpoint {
+//     async fn run(&self) {
+//         panic!("")
+//     }
+// }
 
 #[pymodule(name = "hfendpoints")]
 fn register_hfendpoints_pymodule(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<PyEndpoint>()?;
+    // m.add_class::<PyEndpoint>()?;
 
     // hfendpoints.openai
-    register_hfendpoints_openai_pymodule(m);
+    register_hfendpoints_openai_pymodule(m)?;
     Ok(())
 }

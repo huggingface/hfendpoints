@@ -1,7 +1,8 @@
 use axum::body::Bytes;
 use axum::extract::Multipart;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 use utoipa::ToSchema;
 
 #[cfg(feature = "python")]
@@ -227,10 +228,10 @@ pub struct TranscriptionRequest {
         (status = OK, description = "Transcribes audio into the input language.", body = String)
     )
 )]
-pub async fn create_transcription(mut multipart: Multipart) -> Result<TranscriptionResponse, ()> {
+pub async fn create_transcription(mut multipart: Multipart) -> impl IntoResponse {
     // let request = TranscriptionRequest::try_from_multipart(&mut multipart)?;
 
-    Err(())
+    StatusCode::OK
 }
 
 #[cfg(test)]

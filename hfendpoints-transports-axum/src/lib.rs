@@ -1,3 +1,5 @@
+use axum::response::IntoResponse;
+
 pub mod openai;
 
 #[cfg(feature = "python")]

@@ -1,1 +1,1 @@
-mod transcription;
+pub(crate) mod transcription;
