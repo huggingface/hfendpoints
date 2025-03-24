@@ -1,10 +1,9 @@
-use axum::response::IntoResponse;
+use axum::Router;
 use thiserror::Error;
 use tokio::io::Error as TokioIoError;
-use tokio::net::{TcpListener, ToSocketAddrs};
-use utoipa::ToSchema;
+use tokio::net::ToSocketAddrs;
+use utoipa::openapi::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
-use utoipa_axum::routes;
 
 mod audio;
 
@@ -15,34 +14,65 @@ pub enum OpenAiError {
     IoError(#[from] TokioIoError),
 }
 
-pub struct OpenAi {
-    router: OpenApiRouter,
+pub(crate) trait OpenAiRouterFactory {
+    fn description() -> &'static str;
+    fn routes() -> OpenApiRouter;
 }
 
-impl OpenAi {
-    pub fn new() -> Self {
+pub struct OpenAiEndpoint {
+    description: &'static str,
+    api: OpenApi,
+    router: Router,
+}
+
+impl OpenAiEndpoint {
+    pub fn new<F: OpenAiRouterFactory>() -> Self {
+        // Create the routes under /api/v1 to match OpenAi Platform endpoints
+        let (router, api) = OpenApiRouter::new()
+            .nest("/api/v1", F::routes())
+            .split_for_parts();
+
         Self {
-            router: OpenApiRouter::new(),
+            api,
+            router,
+            description: F::description(),
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+pub mod python {
+    use crate::openai::audio::transcription::TranscriptionEndpointFactory;
+    use crate::openai::OpenAiEndpoint;
+    use hfendpoints_binding_python::ImportablePyModuleBuilder;
+    use pyo3::prelude::*;
+
+    #[pyclass(name = "TranscriptionEndpoint", subclass)]
+    pub struct PyTranscriptionEndpoint {
+        inner: OpenAiEndpoint,
+    }
+
+    #[pymethods]
+    impl PyTranscriptionEndpoint {
+        #[new]
+        pub fn new() -> Self {
+            Self {
+                inner: OpenAiEndpoint::new::<TranscriptionEndpointFactory>(),
+            }
+        }
+
+        pub fn description(&self) -> &'static str {
+            self.inner.description
         }
     }
 
-    ///
-    pub fn with_create_transcriptions(mut self) -> Self {
-        self.router = self
-            .router
-            .routes(routes!(audio::transcription::create_transcription));
+    /// Inject hfendpoints.openai submodule
+    pub fn bind<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
+        let module = ImportablePyModuleBuilder::new(py, name)?
+            .defaults()?
+            .add_class::<PyTranscriptionEndpoint>()?
+            .finish();
 
-        self
-    }
-
-    pub async fn listen<A: ToSocketAddrs>(self, interface: A) {
-        let transport = TcpListener::bind(interface).await.expect("Failed to bind");
-        let (router, api) = OpenApiRouter::new()
-            .nest("/api/v1", self.router)
-            .split_for_parts();
-
-        axum::serve(transport, router)
-            .await
-            .expect("Failed to serve");
+        Ok(module)
     }
 }

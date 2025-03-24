@@ -1,12 +1,15 @@
 use axum::body::Bytes;
 use axum::extract::Multipart;
-use axum::http::StatusCode;
 use axum::response::IntoResponse;
+use axum::Json;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::openai::OpenAiRouterFactory;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
 /// One segment of the transcribed text and the corresponding details.
 #[cfg_attr(feature = "python", pyclass)]
@@ -219,19 +222,30 @@ pub struct TranscriptionRequest {
 
 #[utoipa::path(
     post,
-    path = "audio/transcriptions",
+    path = "/audio/transcriptions",
     tag = "transcriptions",
     request_body(content = TranscriptionForm, content_type = "multipart/form-data"),
     responses(
-        (status = OK, description = "Transcribes audio into the input language.", body = Transcription),
-        (status = OK, description = "Transcribes audio into the input language.", body = VerboseTranscription),
+        // (status = OK, description = "Transcribes audio into the input language.", body = Transcription),
+        // (status = OK, description = "Transcribes audio into the input language.", body = VerboseTranscription),
         (status = OK, description = "Transcribes audio into the input language.", body = String)
     )
 )]
-pub async fn create_transcription(mut multipart: Multipart) -> impl IntoResponse {
+pub async fn create_transcription(_multipart: Multipart) -> Json<&'static str> {
     // let request = TranscriptionRequest::try_from_multipart(&mut multipart)?;
 
-    StatusCode::OK
+    Json::from("Hello World")
+}
+
+pub struct TranscriptionEndpointFactory;
+impl OpenAiRouterFactory for TranscriptionEndpointFactory {
+    fn description() -> &'static str {
+        "transcriptions"
+    }
+
+    fn routes() -> OpenApiRouter {
+        OpenApiRouter::new().routes(routes!(create_transcription))
+    }
 }
 
 #[cfg(test)]
