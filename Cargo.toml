@@ -9,3 +9,5 @@ members = [
 
 [workspace.dependencies]
 pyo3 = { version = "0.24.0", features = ["abi3-py312"] }
+tokio = "1.44"
+tracing = "0.1.41"

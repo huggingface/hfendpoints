@@ -5,6 +5,7 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::openai::audio::AUDIO_TAG;
 use crate::openai::OpenAiRouterFactory;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
@@ -223,7 +224,7 @@ pub struct TranscriptionRequest {
 #[utoipa::path(
     post,
     path = "/audio/transcriptions",
-    tag = "transcriptions",
+    tag = AUDIO_TAG,
     request_body(content = TranscriptionForm, content_type = "multipart/form-data"),
     responses(
         // (status = OK, description = "Transcribes audio into the input language.", body = Transcription),
@@ -237,10 +238,12 @@ pub async fn create_transcription(_multipart: Multipart) -> Json<&'static str> {
     Json::from("Hello World")
 }
 
+/// Helper factory to build
+/// [OpenAi Platform compatible Transcription endpoint](https://platform.openai.com/docs/api-reference/audio/createTranscription)
 pub struct TranscriptionEndpointFactory;
 impl OpenAiRouterFactory for TranscriptionEndpointFactory {
     fn description() -> &'static str {
-        "transcriptions"
+        "Transcribes audio into the input language."
     }
 
     fn routes() -> OpenApiRouter {

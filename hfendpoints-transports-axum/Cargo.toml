@@ -6,12 +6,14 @@ edition = "2024"
 [dependencies]
 axum = { version = "0.8", features = ["multipart"] }
 hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
-pyo3 = { version = "0.24.0", optional = true, features = ["abi3-py312"] }
+pyo3 = { version = "0.24.0", optional = true, features = ["abi3-py312", "experimental-async"] }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
-tokio = { version = "1.40", features = ["net", "parking_lot"] }
-utoipa = "5.3"
+tokio = { workspace = true, features = ["net", "parking_lot", "rt-multi-thread"] }
+tracing.workspace = true
+utoipa = { version = "5.3", features = ["smallvec"] }
 utoipa-axum = "0.2"
+utoipa-redoc = { version = "6.0.0", features = ["axum"] }
 
 [dev-dependencies]
 serde_json = "1.0"
