@@ -14,7 +14,8 @@ use utoipa_axum::routes;
 
 /// One segment of the transcribed text and the corresponding details.
 #[cfg_attr(feature = "python", pyclass)]
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Serialize, ToSchema)]
 pub struct Segment {
     /// Unique identifier of the segment.
     id: u16,
@@ -52,7 +53,8 @@ pub struct Segment {
 
 /// Represents a transcription response returned by model, based on the provided input.
 #[cfg_attr(feature = "python", pyclass)]
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Serialize, ToSchema)]
 pub struct Transcription {
     /// The transcribed text.
     text: String,
@@ -60,7 +62,8 @@ pub struct Transcription {
 
 /// Represents a verbose json transcription response returned by model, based on the provided input.
 #[cfg_attr(feature = "python", pyclass)]
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Serialize, ToSchema)]
 pub struct VerboseTranscription {
     /// The transcribed text.
     text: String,
@@ -76,7 +79,8 @@ pub struct VerboseTranscription {
 }
 
 #[cfg_attr(feature = "python", pyclass)]
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Serialize, ToSchema)]
 #[serde(tag = "type")]
 #[serde(rename = "transcript.text.delta")]
 pub struct Delta {
@@ -86,7 +90,8 @@ pub struct Delta {
 }
 
 #[cfg_attr(feature = "python", pyclass)]
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Serialize, ToSchema)]
 #[serde(tag = "type")]
 #[serde(rename = "transcript.text.done")]
 pub struct Done {
@@ -96,7 +101,8 @@ pub struct Done {
 }
 
 #[cfg_attr(feature = "python", pyclass)]
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Serialize, ToSchema)]
 #[serde(untagged)]
 pub enum StreamEvent {
     /// Emitted when there is an additional text delta.
@@ -111,7 +117,8 @@ pub enum StreamEvent {
 }
 
 #[cfg_attr(feature = "python", pyclass)]
-#[derive(Debug, Copy, Clone, Deserialize, ToSchema)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Copy, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ResponseFormat {
     Json,
@@ -128,7 +135,8 @@ impl Default for ResponseFormat {
 
 /// The transcription object, a verbose transcription object or a stream of transcript events.
 #[cfg_attr(feature = "python", pyclass)]
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Serialize, ToSchema)]
 pub enum TranscriptionResponse {
     Json(Transcription),
     Text(String),
@@ -137,6 +145,7 @@ pub enum TranscriptionResponse {
 
 /// Transcribes audio into the input language.
 #[derive(ToSchema)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 struct TranscriptionForm {
     /// The audio file object (not file name) to transcribe, in one of these formats: flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, or webm.
     #[schema(format = Binary)]
@@ -163,7 +172,8 @@ struct TranscriptionForm {
 }
 
 #[cfg_attr(feature = "python", pyclass)]
-#[derive(Debug, Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone)]
 pub struct TranscriptionRequest {
     file: Bytes,
     content_type: Option<&'static str>,
@@ -175,50 +185,50 @@ pub struct TranscriptionRequest {
 
 // impl TranscriptionRequest {
 //     async fn try_from_multipart(multipart: &mut Multipart) -> Result<Self, MultipartError> {
-//         let mut file = None;
-//         let mut content_type = None;
-//         let mut language = None;
-//         let mut prompt = None;
-//         let mut temperature = None;
-//         let mut response_format = None;
+// let mut file = None;
+// let mut content_type = None;
+// let mut language = None;
+// let mut prompt = None;
+// let mut temperature = None;
+// let mut response_format = None;
 //
-//         while let Some(field) = multipart.next_field().await.unwrap() {
-//             let name = field.name().unwrap().to_string();
+// while let Some(field) = multipart.next_field().await? {
+//     let name = field.name().unwrap().to_string();
 //
-//             match name.as_str() {
-//                 "file" => {
-//                     file = Some(field.bytes().await?);
-//                     content_type = field.content_type();
-//                 }
-//                 "language" => language = Some(field.text().await?),
-//                 "prompt" => prompt = Some(field.text().await?),
-//                 "temperature" => temperature = Some(f32::from_str(&field.text()?.await)?),
-//                 "response_format" => match field.text().await?.as_str() {
-//                     "json" => response_format = Some(ResponseFormat::Json),
-//                     "text" => response_format = Some(ResponseFormat::Text),
-//                     "verbose_json" => response_format = Some(ResponseFormat::VerboseJson),
-//                 },
-//                 _ => {}
-//             }
+//     match name.as_str() {
+//         "file" => {
+//             file = Some(field.bytes().await?);
+//             content_type = field.content_type();
 //         }
-//
-//         if file.is_none() {
-//             return Err(());
-//         }
-//
-//         if response_format.is_none() {
-//             return Err(());
-//         }
-//
-//         Ok(Self {
-//             file: file.unwrap(),
-//             content_type,
-//             language,
-//             prompt,
-//             temperature,
-//             response_format: response_format.unwrap(),
-//         })
+//         "language" => language = Some(field.text().await?),
+//         "prompt" => prompt = Some(field.text().await?),
+//         "temperature" => temperature = Some(f32::from_str(&field.text()?.await)?),
+//         "response_format" => match field.text().await?.as_str() {
+//             "json" => response_format = Some(ResponseFormat::Json),
+//             "text" => response_format = Some(ResponseFormat::Text),
+//             "verbose_json" => response_format = Some(ResponseFormat::VerboseJson),
+//         },
+//         _ => {}
 //     }
+// }
+//
+// if file.is_none() {
+//     return Err(());
+// }
+//
+// if response_format.is_none() {
+//     return Err(());
+// }
+//
+// Ok(Self {
+//     file: file.unwrap(),
+//     content_type,
+//     language,
+//     prompt,
+//     temperature,
+//     response_format: response_format.unwrap(),
+// })
+// }
 // }
 
 #[utoipa::path(
@@ -227,14 +237,11 @@ pub struct TranscriptionRequest {
     tag = AUDIO_TAG,
     request_body(content = TranscriptionForm, content_type = "multipart/form-data"),
     responses(
-        // (status = OK, description = "Transcribes audio into the input language.", body = Transcription),
-        // (status = OK, description = "Transcribes audio into the input language.", body = VerboseTranscription),
-        (status = OK, description = "Transcribes audio into the input language.", body = String)
+        (status = OK, description = "Transcribes audio into the input language.", body = TranscriptionResponse),
     )
 )]
 pub async fn create_transcription(_multipart: Multipart) -> Json<&'static str> {
     // let request = TranscriptionRequest::try_from_multipart(&mut multipart)?;
-
     Json::from("Hello World")
 }
 
