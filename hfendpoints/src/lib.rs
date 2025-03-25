@@ -14,6 +14,9 @@ mod python {
 
     #[pymodule]
     pub fn hfendpoints(py: Python, m: Bound<'_, PyModule>) -> PyResult<()> {
+        // Print Rust logs in Python's ones
+        pyo3_log::init();
+
         let name = m.name()?.extract::<String>()?;
 
         // hfendpoints

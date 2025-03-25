@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from asyncio import AbstractEventLoop
 
 from hfendpoints.hfendpoints.openai import TranscriptionEndpoint
@@ -17,6 +18,9 @@ async def entrypoint(loop: AbstractEventLoop):
 
 
 if __name__ == "__main__":
+    logging.basicConfig()
+    logging.getLogger().setLevel(logging.DEBUG)
+    
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(entrypoint(loop))
