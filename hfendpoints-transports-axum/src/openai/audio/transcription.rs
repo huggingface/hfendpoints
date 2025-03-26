@@ -1,16 +1,20 @@
+use crate::openai::audio::AUDIO_TAG;
+use crate::openai::{OpenAiResult, OpenAiRouterFactory};
 use axum::body::Bytes;
-use axum::extract::Multipart;
+use axum::extract::{DefaultBodyLimit, Multipart};
 use axum::response::IntoResponse;
 use axum::Json;
+use hfendpoints_inference_engine::InferService;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use utoipa::ToSchema;
-
-use crate::openai::audio::AUDIO_TAG;
-use crate::openai::OpenAiRouterFactory;
-#[cfg(feature = "python")]
-use pyo3::prelude::*;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
+
+use crate::openai::error::OpenAiError::ValidationError;
+#[cfg(feature = "python")]
+use pyo3::prelude::*;
+use tracing::log::info;
 
 /// One segment of the transcribed text and the corresponding details.
 #[cfg_attr(feature = "python", pyclass)]
@@ -175,61 +179,86 @@ struct TranscriptionForm {
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone)]
 pub struct TranscriptionRequest {
-    file: Bytes,
-    content_type: Option<&'static str>,
-    language: Option<String>,
-    prompt: Option<String>,
-    temperature: Option<f32>,
-    response_format: ResponseFormat,
+    pub file: Bytes,
+    pub content_type: String,
+    pub language: String,
+    pub prompt: Option<String>,
+    pub temperature: f32,
+    pub response_format: ResponseFormat,
 }
 
-// impl TranscriptionRequest {
-//     async fn try_from_multipart(multipart: &mut Multipart) -> Result<Self, MultipartError> {
-// let mut file = None;
-// let mut content_type = None;
-// let mut language = None;
-// let mut prompt = None;
-// let mut temperature = None;
-// let mut response_format = None;
-//
-// while let Some(field) = multipart.next_field().await? {
-//     let name = field.name().unwrap().to_string();
-//
-//     match name.as_str() {
-//         "file" => {
-//             file = Some(field.bytes().await?);
-//             content_type = field.content_type();
-//         }
-//         "language" => language = Some(field.text().await?),
-//         "prompt" => prompt = Some(field.text().await?),
-//         "temperature" => temperature = Some(f32::from_str(&field.text()?.await)?),
-//         "response_format" => match field.text().await?.as_str() {
-//             "json" => response_format = Some(ResponseFormat::Json),
-//             "text" => response_format = Some(ResponseFormat::Text),
-//             "verbose_json" => response_format = Some(ResponseFormat::VerboseJson),
-//         },
-//         _ => {}
-//     }
-// }
-//
-// if file.is_none() {
-//     return Err(());
-// }
-//
-// if response_format.is_none() {
-//     return Err(());
-// }
-//
-// Ok(Self {
-//     file: file.unwrap(),
-//     content_type,
-//     language,
-//     prompt,
-//     temperature,
-//     response_format: response_format.unwrap(),
-// })
-// }
-// }
+impl TranscriptionRequest {
+    fn validate(
+        file: Option<Bytes>,
+        content_type: String,
+        language: Option<String>,
+        prompt: Option<String>,
+        temperature: Option<f32>,
+        response_format: Option<String>,
+    ) -> OpenAiResult<Self> {
+        let file = match file {
+            Some(file) => Ok(file),
+            None => Err(ValidationError(
+                "Required parameter 'file' was not provided".to_string(),
+            )),
+        }?;
+
+        let response_format = response_format.unwrap_or(String::from("json"));
+        let response_format = match response_format.as_str() {
+            "json" => Ok(ResponseFormat::Json),
+            "verbose_json" => Ok(ResponseFormat::VerboseJson),
+            "text" => Ok(ResponseFormat::Text),
+            _ => Err(ValidationError(format!(
+                "Unknown response_format: {response_format}. Possible values are: 'json', 'verbose_json', 'text'."
+            ))),
+        }?;
+
+        let language = language.unwrap_or(String::from("en"));
+        let temperature = temperature.unwrap_or(0.0);
+
+        Ok(Self {
+            file,
+            content_type,
+            language,
+            prompt,
+            temperature,
+            response_format,
+        })
+    }
+
+    async fn try_from_multipart(mut multipart: Multipart) -> OpenAiResult<Self> {
+        let mut file: OpenAiResult<Option<Bytes>> = Ok(None);
+        let mut content_type: Option<String> = None;
+        let mut language: OpenAiResult<Option<String>> = Ok(None);
+        let mut prompt: OpenAiResult<Option<String>> = Ok(None);
+        let mut temperature: OpenAiResult<Option<f32>> = Ok(None);
+        let mut response_format: OpenAiResult<Option<String>> = Ok(None);
+
+        while let Some(field) = multipart.next_field().await? {
+            let name = field.name().unwrap().to_string();
+            match name.as_str() {
+                "file" => {
+                    content_type = Some(field.content_type().unwrap_or("unknown").to_string());
+                    file = Ok(Some(field.bytes().await?));
+                }
+                "language" => language = Ok(Some(field.text().await?.to_string())),
+                "prompt" => prompt = Ok(Some(field.text().await?.to_string())),
+                "temperature" => temperature = Ok(Some(f32::from_str(&field.text().await?)?)),
+                "response_format" => response_format = Ok(Some(field.text().await?.to_string())),
+                _ => return Err(ValidationError(format!("Unknown field: {name}"))),
+            }
+        }
+
+        Self::validate(
+            file?,
+            content_type.unwrap(),
+            language?,
+            prompt?,
+            temperature?,
+            response_format?,
+        )
+    }
+}
 
 #[utoipa::path(
     post,
@@ -240,9 +269,14 @@ pub struct TranscriptionRequest {
         (status = OK, description = "Transcribes audio into the input language.", body = TranscriptionResponse),
     )
 )]
-pub async fn create_transcription(_multipart: Multipart) -> Json<&'static str> {
-    // let request = TranscriptionRequest::try_from_multipart(&mut multipart)?;
-    Json::from("Hello World")
+pub async fn transcribe(multipart: Multipart) -> OpenAiResult<Json<&'static str>> {
+    let request = TranscriptionRequest::try_from_multipart(multipart).await?;
+    info!(
+        "Received audio file {} ({} kB)",
+        &request.content_type,
+        request.file.len() / 1024
+    );
+    Ok(Json::from("Hello World"))
 }
 
 /// Helper factory to build
@@ -254,7 +288,9 @@ impl OpenAiRouterFactory for TranscriptionEndpointFactory {
     }
 
     fn routes() -> OpenApiRouter {
-        OpenApiRouter::new().routes(routes!(create_transcription))
+        OpenApiRouter::new()
+            .routes(routes!(transcribe))
+            .layer(DefaultBodyLimit::max(200 * 1024 * 1024))
     }
 }
 

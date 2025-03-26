@@ -5,6 +5,10 @@ from asyncio import AbstractEventLoop
 from hfendpoints.hfendpoints.openai import TranscriptionEndpoint
 
 
+class
+
+
+
 class VllmTranscriptionEndpoint(TranscriptionEndpoint):
     def __init__(self):
         super().__init__()

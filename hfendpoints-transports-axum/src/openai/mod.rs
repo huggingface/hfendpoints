@@ -1,7 +1,5 @@
 use axum::{Json, Router};
 use std::ops::Deref;
-use thiserror::Error;
-use tokio::io::Error as TokioIoError;
 use tokio::net::{TcpListener, ToSocketAddrs};
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
@@ -9,15 +7,12 @@ use utoipa_axum::routes;
 use utoipa_redoc::{Redoc, Servable};
 
 mod audio;
+mod error;
 
 use audio::{AUDIO_DESC, AUDIO_TAG};
+use error::OpenAiError;
 
-/// Define all the possible errors for OpenAI Compatible Endpoint
-#[derive(Debug, Error)]
-pub enum OpenAiError {
-    #[error("I/O Error occured: {0}")]
-    IoError(#[from] TokioIoError),
-}
+type OpenAiResult<T> = Result<T, OpenAiError>;
 
 /// Interface describing how to create an OpenAiRouter to be consumed by
 /// the `OpenAiEndpoint` for allocating and exposing services to the network.
@@ -63,7 +58,6 @@ impl OpenAiEndpoint {
 
         // API Documentation
         let router = router.merge(Redoc::with_url("/doc", api.clone()));
-
         Self {
             // api,
             router,
@@ -72,7 +66,7 @@ impl OpenAiEndpoint {
     }
 
     pub fn run<A: ToSocketAddrs>(self, interface: A) -> Result<(), ()> {
-        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             println!("Spawning OpenAi Endpoint");
             let transport = TcpListener::bind(interface).await.expect("Failed to bind");

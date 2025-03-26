@@ -1,0 +1,12 @@
+[package]
+name = "hfendpoints-inference-engine"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+prost = "0.13"
+prost-types = "0.13"
+
+
+[build-dependencies]
+prost-build = "0.13"

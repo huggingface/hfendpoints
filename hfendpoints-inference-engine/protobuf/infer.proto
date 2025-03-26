@@ -1,0 +1,11 @@
+message Request {
+
+}
+
+message Response {
+
+}
+
+service InferService {
+  rpc OnRequest(Request) returns (Response);
+}

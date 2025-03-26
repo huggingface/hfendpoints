@@ -6,9 +6,10 @@ edition = "2024"
 [dependencies]
 axum = { version = "0.8", features = ["multipart"] }
 hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
+hfendpoints-inference-engine = { path = "../hfendpoints-inference-engine" }
 pyo3 = { version = "0.24.0", optional = true, features = ["abi3-py312", "experimental-async"] }
 serde = { version = "1.0", features = ["derive"] }
-thiserror = "1.0"
+thiserror = "2.0"
 tokio = { workspace = true, features = ["net", "parking_lot", "rt-multi-thread"] }
 tracing.workspace = true
 utoipa = { version = "5.3", features = ["smallvec"] }
