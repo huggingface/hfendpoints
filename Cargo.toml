@@ -2,7 +2,8 @@
 resolver = "3"
 members = [
     "hfendpoints",
-    "hfendpoints-binding-python", "hfendpoints-inference-engine",
+    "hfendpoints-binding-python",
+    "hfendpoints-core",
     "hfendpoints-transports",
     "hfendpoints-transports-axum"
 ]

@@ -1,20 +1,19 @@
 use crate::openai::audio::AUDIO_TAG;
-use crate::openai::{OpenAiResult, OpenAiRouterFactory};
+use crate::openai::OpenAiResult;
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Multipart};
-use axum::response::IntoResponse;
-use axum::Json;
-use hfendpoints_inference_engine::InferService;
+use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use tracing::log::info;
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
 use crate::openai::error::OpenAiError::ValidationError;
+
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
-use tracing::log::info;
 
 /// One segment of the transcribed text and the corresponding details.
 #[cfg_attr(feature = "python", pyclass)]
@@ -281,16 +280,12 @@ pub async fn transcribe(multipart: Multipart) -> OpenAiResult<Json<&'static str>
 
 /// Helper factory to build
 /// [OpenAi Platform compatible Transcription endpoint](https://platform.openai.com/docs/api-reference/audio/createTranscription)
-pub struct TranscriptionEndpointFactory;
-impl OpenAiRouterFactory for TranscriptionEndpointFactory {
-    fn description() -> &'static str {
-        "Transcribes audio into the input language."
-    }
-
-    fn routes() -> OpenApiRouter {
+pub struct TranscriptionRouter;
+impl Into<OpenApiRouter> for TranscriptionRouter {
+    fn into(self) -> OpenApiRouter {
         OpenApiRouter::new()
             .routes(routes!(transcribe))
-            .layer(DefaultBodyLimit::max(200 * 1024 * 1024))
+            .layer(DefaultBodyLimit::max(200 * 1024 * 1024)) // 200Mb as OpenAI
     }
 }
 

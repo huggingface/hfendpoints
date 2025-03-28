@@ -1,9 +1,3 @@
-/// High-level object containing all the information required to run the actual endpoint
-pub trait Endpoint {
-    /// Main entrypoint for running the actual endpoint
-    fn run(&self) -> impl Future<Output = ()> + Send;
-}
-
 #[cfg(feature = "python")]
 mod python {
     use hfendpoints_binding_python::ImportablePyModuleBuilder;

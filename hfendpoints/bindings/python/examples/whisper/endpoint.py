@@ -2,29 +2,31 @@ import asyncio
 import logging
 from asyncio import AbstractEventLoop
 
-from hfendpoints.hfendpoints.openai import TranscriptionEndpoint
+from hfendpoints.hfendpoints.openai import AutomaticSpeechRecognitionEndpoint
 
 
-class
+# class WhisperHandler(Handler):
+#
+#     def __new__(cls, model_id_or_path: str, ):
+#         return super().__new__(cls, model_id_or_path)
+#
+#     async def __call__(self, request):
+#         print(f"call: {request}")
 
 
-
-class VllmTranscriptionEndpoint(TranscriptionEndpoint):
-    def __init__(self):
-        super().__init__()
+class WhisperEndpoint(AutomaticSpeechRecognitionEndpoint):
+    pass
 
 
 async def entrypoint(loop: AbstractEventLoop):
-    endpoint = VllmTranscriptionEndpoint()
-    print(endpoint, "task:", endpoint.description())
-
-    loop.run_in_executor(None, endpoint.run, "0.0.0.0", 8000)
+    endpoint = WhisperEndpoint()
+    await loop.run_in_executor(None, endpoint.run, "0.0.0.0", 8000)
 
 
 if __name__ == "__main__":
     logging.basicConfig()
     logging.getLogger().setLevel(logging.DEBUG)
-    
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(entrypoint(loop))

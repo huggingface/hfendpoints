@@ -1,0 +1,13 @@
+[package]
+name = "hfendpoints-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
+pyo3 = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["sync"] }
+
+[features]
+default = []
+python = ["pyo3", "hfendpoints-binding-python"]

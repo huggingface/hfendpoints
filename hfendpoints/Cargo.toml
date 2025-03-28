@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
+hfendpoints-core = { path = "../hfendpoints-core", optional = true }
 hfendpoints-transports = { path = "../hfendpoints-transports" }
 hfendpoints-transports-axum = { path = "../hfendpoints-transports-axum" }
 pyo3 = { workspace = true, optional = true, features = ["extension-module"] }
@@ -12,4 +13,11 @@ pyo3-log = { version = "0.12.2", optional = true }
 
 [features]
 default = []
-python = ["pyo3", "pyo3-log", "hfendpoints-transports/python", "hfendpoints-transports-axum/python", "hfendpoints-binding-python"]
+python = [
+    "pyo3",
+    "pyo3-log",
+    "hfendpoints-binding-python",
+    "hfendpoints-core/python",
+    "hfendpoints-transports/python",
+    "hfendpoints-transports-axum/python"
+]
