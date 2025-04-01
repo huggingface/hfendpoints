@@ -54,7 +54,7 @@ where
     let router = router.merge(Scalar::with_url("/docs", api));
 
     let listener = TcpListener::bind(interface).await?;
-    let handler = axum::serve(listener, router).await?;
+    axum::serve(listener, router).await?;
     Ok(())
 }
 
@@ -65,15 +65,15 @@ pub mod python {
     };
     use crate::openai::serve_openai;
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
-    use hfendpoints_core::{Endpoint, Handler};
+    use hfendpoints_core::{spawn_handler, Endpoint, Error, Handler};
     use pyo3::prelude::*;
     use pyo3::types::PyNone;
     use std::sync::Arc;
-    use std::thread::{spawn, JoinHandle};
+    use std::thread::JoinHandle;
     use std::time::Duration;
     use tokio::runtime::Builder;
     use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
-    use tracing::info;
+    use tracing::{error, info};
 
     macro_rules! py_openai_endpoint_impl {
         ($name: ident, $router: ident, $request: ident, $response: ident) => {
@@ -86,11 +86,14 @@ pub mod python {
                 type Request = TranscriptionRequest;
                 type Response = TranscriptionResponse;
 
-                fn on_request(&self, request: Self::Request) -> Self::Response {
+                fn on_request(&self, request: Self::Request) -> Result<Self::Response, Error> {
                     info!("[FFI] Calling Python Handler");
 
-                    Python::with_gil(|py| self.inner.call(py, (request,), None));
-                    TranscriptionResponse::Text(String::from("Done"))
+                    Ok(Python::with_gil(|py| {
+                        self.inner
+                            .call(py, (request, PyNone::get(py)), None)?
+                            .extract::<TranscriptionResponse>(py)
+                    })?)
                 }
             }
 
@@ -128,36 +131,19 @@ pub mod python {
 
                         // IPC between the front running the API and the back executing the inference
                         let background_handler = Arc::clone(&self.handler);
-                        let (sender, mut receiver) =
-                            unbounded_channel::<($request, UnboundedSender<$response>)>();
+                        let (sender, receiver) = unbounded_channel::<(
+                            $request,
+                            UnboundedSender<Result<$response, Error>>,
+                        )>();
 
                         info!("[LOOPER] Spawning inference thread");
-                        let inference_handle = spawn(move || {
-                            loop {
-                                if let Some((request, _)) = receiver.blocking_recv() {
-                                    info!("[LOOPER] Received request");
-                                    let response = background_handler.on_request(request);
-                                    info!("[LOOPER] Response ready");
-                                }
-                            }
-                        });
-                        //         info!("[GIL] Acquired");
-                        //         outer.allow_threads(|| {
-                        //             loop {
-                        //                 if let Some((request, _)) = receiver.blocking_recv() {
-                        //                     info!("[LOOPER] Received request");
-                        //                     let _ = background_handler.on_request(request);
-                        //                 }
-                        //             }
-                        //         })
-                        //     })
-                        // });
+                        let inference_handle = spawn_handler(receiver, background_handler);
 
                         // Spawn the root task, scheduling all the underlying
                         rt.block_on(async move {
                             if let Err(err) = serve_openai((interface, port), $router(sender)).await
                             {
-                                println!("Failed to start OpenAi compatible endpoint: {err}");
+                                error!("Failed to start OpenAi compatible endpoint: {err}");
                             };
                         });
 

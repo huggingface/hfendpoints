@@ -12,5 +12,5 @@ class Handler(Protocol[Request, Response]):
     def __init__(self, model_id_or_path: str):
         ...
 
-    def __call__(self, request: Request) -> Response:
+    def __call__(self, request: Request, ctx) -> Response:
         ...

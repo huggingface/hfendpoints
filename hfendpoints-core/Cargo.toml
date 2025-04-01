@@ -6,8 +6,10 @@ edition = "2024"
 [dependencies]
 hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
 pyo3 = { workspace = true, optional = true }
-tokio = { workspace = true, features = ["sync"] }
 serde = { workspace = true, features = ["derive"] }
+thiserror = "2.0"
+tokio = { workspace = true, features = ["sync"] }
+log = "0.4.27"
 
 [features]
 default = []

@@ -1,3 +1,4 @@
+use crate::Error;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 /// Store some information about the context in which the endpoint runs
@@ -5,15 +6,15 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 pub struct EndpointContext<I, O> {
     // /// Realtime information streaming about underlying resources usage of the handler
     // in_flight_tracker: Receiver<InFlightStats>,
-    ipc: UnboundedSender<(I, UnboundedSender<O>)>,
+    ipc: UnboundedSender<(I, UnboundedSender<Result<O, Error>>)>,
 }
 
 impl<I, O> EndpointContext<I, O> {
-    pub fn new(ipc: UnboundedSender<(I, UnboundedSender<O>)>) -> Self {
+    pub fn new(ipc: UnboundedSender<(I, UnboundedSender<Result<O, Error>>)>) -> Self {
         Self { ipc }
     }
 
-    pub fn schedule(&self, request: I) -> UnboundedReceiver<O> {
+    pub fn schedule(&self, request: I) -> UnboundedReceiver<Result<O, Error>> {
         let (sender, receiver) = unbounded_channel();
         if let Err(e) = self.ipc.send((request, sender)) {
             panic!("Failed to send to IPC");

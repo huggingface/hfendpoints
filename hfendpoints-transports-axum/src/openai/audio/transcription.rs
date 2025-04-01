@@ -1,22 +1,22 @@
 use crate::openai::audio::AUDIO_TAG;
+use crate::openai::error::OpenAiError;
 use crate::openai::OpenAiResult;
-use axum::body::Bytes;
+use axum::body::{Body, Bytes};
 use axum::extract::{DefaultBodyLimit, Multipart, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use axum::Json;
+use hfendpoints_core::{EndpointContext, Error};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::log::info;
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
-use crate::openai::error::OpenAiError::ValidationError;
-
-use hfendpoints_core::EndpointContext;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
-use tokio::sync::mpsc::UnboundedSender;
-use tokio::task::spawn_blocking;
 
 /// One segment of the transcribed text and the corresponding details.
 #[cfg_attr(feature = "python", pyclass)]
@@ -149,6 +149,18 @@ pub enum TranscriptionResponse {
     VerboseJson(VerboseTranscription),
 }
 
+impl IntoResponse for TranscriptionResponse {
+    fn into_response(self) -> Response {
+        match self {
+            TranscriptionResponse::Json(transcription) => Json::from(transcription).into_response(),
+            TranscriptionResponse::Text(text) => text.into_response(),
+            TranscriptionResponse::VerboseJson(transcription) => {
+                Json::from(transcription).into_response()
+            }
+        }
+    }
+}
+
 /// Transcribes audio into the input language.
 #[derive(ToSchema)]
 #[cfg_attr(debug_assertions, derive(Debug))]
@@ -200,7 +212,7 @@ impl TranscriptionRequest {
     ) -> OpenAiResult<Self> {
         let file = match file {
             Some(file) => Ok(file),
-            None => Err(ValidationError(
+            None => Err(OpenAiError::Validation(
                 "Required parameter 'file' was not provided".to_string(),
             )),
         }?;
@@ -210,7 +222,7 @@ impl TranscriptionRequest {
             "json" => Ok(ResponseFormat::Json),
             "verbose_json" => Ok(ResponseFormat::VerboseJson),
             "text" => Ok(ResponseFormat::Text),
-            _ => Err(ValidationError(format!(
+            _ => Err(OpenAiError::Validation(format!(
                 "Unknown response_format: {response_format}. Possible values are: 'json', 'verbose_json', 'text'."
             ))),
         }?;
@@ -247,7 +259,7 @@ impl TranscriptionRequest {
                 "prompt" => prompt = Ok(Some(field.text().await?.to_string())),
                 "temperature" => temperature = Ok(Some(f32::from_str(&field.text().await?)?)),
                 "response_format" => response_format = Ok(Some(field.text().await?.to_string())),
-                _ => return Err(ValidationError(format!("Unknown field: {name}"))),
+                _ => return Err(OpenAiError::Validation(format!("Unknown field: {name}"))),
             }
         }
 
@@ -274,7 +286,7 @@ impl TranscriptionRequest {
 pub async fn transcribe(
     State(ctx): State<EndpointContext<TranscriptionRequest, TranscriptionResponse>>,
     multipart: Multipart,
-) -> OpenAiResult<Json<&'static str>> {
+) -> OpenAiResult<TranscriptionResponse> {
     let request = TranscriptionRequest::try_from_multipart(multipart).await?;
     info!(
         "Received audio file {} ({} kB)",
@@ -282,18 +294,22 @@ pub async fn transcribe(
         request.file.len() / 1024
     );
 
-    spawn_blocking(move || {
-        let _streaming = ctx.schedule(request);
-    })
-    .await;
-    Ok(Json::from("Hello World"))
+    let mut egress = ctx.schedule(request);
+    if let Some(response) = egress.recv().await {
+        Ok(response?)
+    } else {
+        Err(OpenAiError::NoResponse)
+    }
 }
 
 /// Helper factory to build
 /// [OpenAi Platform compatible Transcription endpoint](https://platform.openai.com/docs/api-reference/audio/createTranscription)
 #[derive(Clone)]
 pub struct TranscriptionRouter(
-    pub UnboundedSender<(TranscriptionRequest, UnboundedSender<TranscriptionResponse>)>,
+    pub  UnboundedSender<(
+        TranscriptionRequest,
+        UnboundedSender<Result<TranscriptionResponse, Error>>,
+    )>,
 );
 impl Into<OpenApiRouter> for TranscriptionRouter {
     fn into(self) -> OpenApiRouter {
@@ -301,6 +317,32 @@ impl Into<OpenApiRouter> for TranscriptionRouter {
             .routes(routes!(transcribe))
             .with_state(EndpointContext::<TranscriptionRequest, TranscriptionResponse>::new(self.0))
             .layer(DefaultBodyLimit::max(200 * 1024 * 1024)) // 200Mb as OpenAI
+    }
+}
+
+#[cfg(feature = "python")]
+mod python {
+    use crate::openai::audio::transcription::{
+        Transcription, TranscriptionResponse, VerboseTranscription,
+    };
+    use pyo3::prelude::*;
+
+    #[pymethods]
+    impl TranscriptionResponse {
+        #[staticmethod]
+        fn text(content: String) -> Self {
+            Self::Text(content)
+        }
+
+        #[staticmethod]
+        fn json(content: String) -> Self {
+            Self::Json(Transcription { text: content })
+        }
+
+        #[staticmethod]
+        fn verbose(transcription: VerboseTranscription) -> Self {
+            Self::VerboseJson(transcription)
+        }
     }
 }
 

@@ -9,8 +9,9 @@ class WhisperHandler(Handler[TranscriptionRequest, TranscriptionResponse]):
     def __init__(self, model_id_or_path: str):
         super().__init__(model_id_or_path)
 
-    def __call__(self, request: TranscriptionRequest) -> TranscriptionResponse:
+    def __call__(self, request: TranscriptionRequest, ctx) -> TranscriptionResponse:
         print(f"[Python] handler call: {request}")
+        return TranscriptionResponse.text("Done from Python")
 
 
 def entrypoint():

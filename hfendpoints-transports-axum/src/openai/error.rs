@@ -1,6 +1,7 @@
-use crate::openai::error::OpenAiError::ValidationError;
 use axum::extract::multipart::MultipartError;
+use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use hfendpoints_core::Error as EndpointError;
 use std::num::ParseFloatError;
 use thiserror::Error;
 use tokio::io::Error as TokioIoError;
@@ -8,33 +9,42 @@ use tokio::io::Error as TokioIoError;
 /// Define all the possible errors for OpenAI Compatible Endpoint
 #[derive(Debug, Error)]
 pub enum OpenAiError {
+    #[error("Endpoint error: {0}")]
+    Endpoint(#[from] EndpointError),
+
     #[error("I/O Error occured: {0}")]
-    IoError(#[from] TokioIoError),
+    Io(#[from] TokioIoError),
 
     #[error("Malformed multipart/form-data payload: {0}")]
-    MultipartError(#[from] MultipartError),
+    Multipart(#[from] MultipartError),
 
     #[error("Validation failed: {0}")]
-    ValidationError(String),
+    Validation(String),
+
+    #[error("No response was returned by the inference engine")]
+    NoResponse,
 }
 
 impl From<ParseFloatError> for OpenAiError {
     #[inline]
     fn from(value: ParseFloatError) -> Self {
-        ValidationError(value.to_string())
+        Self::Validation(value.to_string())
     }
 }
 
 impl IntoResponse for OpenAiError {
     fn into_response(self) -> Response {
-        let builder = match self {
-            OpenAiError::IoError(msg) => Response::builder().status(500).body(msg.to_string()),
-            OpenAiError::MultipartError(msg) => {
-                Response::builder().status(400).body(msg.to_string())
-            }
-            ValidationError(msg) => Response::builder().status(403).body(msg),
+        let (status, body) = match self {
+            Self::Endpoint(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+            Self::Io(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+            Self::Multipart(e) => (StatusCode::BAD_REQUEST, e.to_string()),
+            Self::Validation(e) => (StatusCode::FORBIDDEN, e),
+            Self::NoResponse => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                String::from("No response returned by the inference engine"),
+            ),
         };
 
-        builder.unwrap().into_response()
+        (status, body).into_response()
     }
 }
