@@ -33,7 +33,7 @@ async fn health() -> Json<&'static str> {
     info(title = "Hugging Face Inference Endpoint Open AI Compatible Endpoint"),
     tags(
         (name = STATUS_TAG, description = STATUS_DESC),
-        (name = AUDIO_TAG, description = AUDIO_DESC)
+        (name = AUDIO_TAG, description = AUDIO_DESC),
     )
 )]
 struct ApiDoc;
@@ -67,12 +67,13 @@ pub mod python {
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
     use hfendpoints_core::{Endpoint, Handler};
     use pyo3::prelude::*;
+    use pyo3::types::PyNone;
     use std::sync::Arc;
     use std::thread::{spawn, JoinHandle};
     use std::time::Duration;
     use tokio::runtime::Builder;
     use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
-    use tokio::time::sleep;
+    use tracing::info;
 
     macro_rules! py_openai_endpoint_impl {
         ($name: ident, $router: ident, $request: ident, $response: ident) => {
@@ -85,9 +86,11 @@ pub mod python {
                 type Request = TranscriptionRequest;
                 type Response = TranscriptionResponse;
 
-                async fn on_request(&mut self, _request: Self::Request) -> Self::Response {
-                    sleep(Duration::from_secs(2)).await;
-                    TranscriptionResponse::Text(String::from("Coucou"))
+                fn on_request(&self, request: Self::Request) -> Self::Response {
+                    info!("[FFI] Calling Python Handler");
+
+                    Python::with_gil(|py| self.inner.call(py, (request,), None));
+                    TranscriptionResponse::Text(String::from("Done"))
                 }
             }
 
@@ -115,37 +118,52 @@ pub mod python {
                 }
 
                 #[pyo3(signature = (interface, port))]
-                pub fn run(&self, interface: String, port: u16) -> PyResult<()> {
-                    // Create the runtime
-                    let rt = Builder::new_multi_thread()
-                        .enable_all()
-                        .build()
-                        .expect("Failed to create runtime");
+                pub fn run(&self, py: Python<'_>, interface: String, port: u16) -> PyResult<()> {
+                    py.allow_threads(|| {
+                        // Create the runtime
+                        let rt = Builder::new_multi_thread()
+                            .enable_all()
+                            .build()
+                            .expect("Failed to create runtime");
 
-                    // IPC between the front running the API and the back executing the inference
-                    let (sender, mut receiver) =
-                        unbounded_channel::<($request, UnboundedSender<$response>)>();
+                        // IPC between the front running the API and the back executing the inference
+                        let background_handler = Arc::clone(&self.handler);
+                        let (sender, mut receiver) =
+                            unbounded_channel::<($request, UnboundedSender<$response>)>();
 
-                    let inference_handle = spawn(move || {
-                        println!("Spawning inference thread");
-                        'outer: loop {
-                            if let Some(request) = receiver.blocking_recv() {
-                                println!("Received request");
-                            } else {
-                                break 'outer;
+                        info!("[LOOPER] Spawning inference thread");
+                        let inference_handle = spawn(move || {
+                            loop {
+                                if let Some((request, _)) = receiver.blocking_recv() {
+                                    info!("[LOOPER] Received request");
+                                    let response = background_handler.on_request(request);
+                                    info!("[LOOPER] Response ready");
+                                }
                             }
-                        }
-                    });
+                        });
+                        //         info!("[GIL] Acquired");
+                        //         outer.allow_threads(|| {
+                        //             loop {
+                        //                 if let Some((request, _)) = receiver.blocking_recv() {
+                        //                     info!("[LOOPER] Received request");
+                        //                     let _ = background_handler.on_request(request);
+                        //                 }
+                        //             }
+                        //         })
+                        //     })
+                        // });
 
-                    // Spawn the root task, scheduling all the underlying
-                    rt.block_on(async move {
-                        if let Err(err) = serve_openai((interface, port), $router(sender)).await {
-                            println!("Failed to start OpenAi compatible endpoint: {err}");
-                        };
-                    });
+                        // Spawn the root task, scheduling all the underlying
+                        rt.block_on(async move {
+                            if let Err(err) = serve_openai((interface, port), $router(sender)).await
+                            {
+                                println!("Failed to start OpenAi compatible endpoint: {err}");
+                            };
+                        });
 
-                    let _ = inference_handle.join();
-                    Ok(())
+                        let _ = inference_handle.join();
+                        Ok(())
+                    })
                 }
             }
         };

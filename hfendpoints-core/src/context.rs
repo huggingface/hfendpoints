@@ -15,9 +15,9 @@ impl<I, O> EndpointContext<I, O> {
 
     pub fn schedule(&self, request: I) -> UnboundedReceiver<O> {
         let (sender, receiver) = unbounded_channel();
-        self.ipc
-            .send((request, sender))
-            .expect("Failed to send request");
+        if let Err(e) = self.ipc.send((request, sender)) {
+            panic!("Failed to send to IPC");
+        }
 
         receiver
     }

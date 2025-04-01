@@ -19,8 +19,7 @@ pub trait Handler {
     /// ```
     ///
     /// ```
-    fn on_request(&mut self, request: Self::Request)
-    -> impl Future<Output = Self::Response> + Send;
+    fn on_request(&self, request: Self::Request) -> Self::Response;
 }
 
 pub async fn spawn_handler<I: Send + 'static, O: Send + 'static>(

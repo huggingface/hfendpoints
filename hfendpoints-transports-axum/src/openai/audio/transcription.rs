@@ -16,6 +16,7 @@ use hfendpoints_core::EndpointContext;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::task::spawn_blocking;
 
 /// One segment of the transcribed text and the corresponding details.
 #[cfg_attr(feature = "python", pyclass)]
@@ -281,7 +282,10 @@ pub async fn transcribe(
         request.file.len() / 1024
     );
 
-    let _ = ctx.schedule(request);
+    spawn_blocking(move || {
+        let _streaming = ctx.schedule(request);
+    })
+    .await;
     Ok(Json::from("Hello World"))
 }
 
