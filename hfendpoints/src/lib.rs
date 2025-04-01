@@ -7,7 +7,7 @@ mod python {
     pub const __VERSION__: &str = env!("CARGO_PKG_VERSION");
 
     #[pymodule]
-    pub fn hfendpoints(py: Python, m: Bound<'_, PyModule>) -> PyResult<()> {
+    pub fn _hfendpoints(py: Python, m: Bound<'_, PyModule>) -> PyResult<()> {
         // Print Rust logs in Python's ones
         // pyo3_log::init();
 
@@ -16,6 +16,7 @@ mod python {
         // hfendpoints
         let pymodule_hfendpoints = ImportablePyModuleBuilder::from(m)
             .defaults()?
+            // .add_submodule(&hfendpoints_core::python::bind(py, &name)?)?
             .add_submodule(&openai::python::bind(py, &format!("{name}.openai"))?)?
             .finish();
 

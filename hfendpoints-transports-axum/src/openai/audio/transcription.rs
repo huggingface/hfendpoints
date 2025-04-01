@@ -1,8 +1,8 @@
 use crate::openai::audio::AUDIO_TAG;
 use crate::openai::OpenAiResult;
 use axum::body::Bytes;
-use axum::extract::{DefaultBodyLimit, Multipart};
-use axum::{Json, Router};
+use axum::extract::{DefaultBodyLimit, Multipart, State};
+use axum::Json;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tracing::log::info;
@@ -12,8 +12,10 @@ use utoipa_axum::routes;
 
 use crate::openai::error::OpenAiError::ValidationError;
 
+use hfendpoints_core::EndpointContext;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
+use tokio::sync::mpsc::UnboundedSender;
 
 /// One segment of the transcribed text and the corresponding details.
 #[cfg_attr(feature = "python", pyclass)]
@@ -268,7 +270,10 @@ impl TranscriptionRequest {
         (status = OK, description = "Transcribes audio into the input language.", body = TranscriptionResponse),
     )
 )]
-pub async fn transcribe(multipart: Multipart) -> OpenAiResult<Json<&'static str>> {
+pub async fn transcribe(
+    State(_ctx): State<EndpointContext<TranscriptionRequest, TranscriptionResponse>>,
+    multipart: Multipart,
+) -> OpenAiResult<Json<&'static str>> {
     let request = TranscriptionRequest::try_from_multipart(multipart).await?;
     info!(
         "Received audio file {} ({} kB)",
@@ -280,11 +285,15 @@ pub async fn transcribe(multipart: Multipart) -> OpenAiResult<Json<&'static str>
 
 /// Helper factory to build
 /// [OpenAi Platform compatible Transcription endpoint](https://platform.openai.com/docs/api-reference/audio/createTranscription)
-pub struct TranscriptionRouter;
+#[derive(Clone)]
+pub struct TranscriptionRouter(
+    pub UnboundedSender<(TranscriptionRequest, UnboundedSender<TranscriptionResponse>)>,
+);
 impl Into<OpenApiRouter> for TranscriptionRouter {
     fn into(self) -> OpenApiRouter {
         OpenApiRouter::new()
             .routes(routes!(transcribe))
+            .with_state(EndpointContext::<TranscriptionRequest, TranscriptionResponse>::new(self.0))
             .layer(DefaultBodyLimit::max(200 * 1024 * 1024)) // 200Mb as OpenAI
     }
 }

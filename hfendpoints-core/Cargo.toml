@@ -7,6 +7,7 @@ edition = "2024"
 hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
 pyo3 = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["sync"] }
+serde = { workspace = true, features = ["derive"] }
 
 [features]
 default = []

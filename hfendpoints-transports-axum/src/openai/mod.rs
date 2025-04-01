@@ -38,35 +38,81 @@ async fn health() -> Json<&'static str> {
 )]
 struct ApiDoc;
 
-pub async fn serve_openai<A: ToSocketAddrs>(interface: A) -> OpenAiResult<()> {
-    let listener = TcpListener::bind(interface).await?;
-    let router = OpenApiRouter::with_openapi(ApiDoc::openapi()).routes(routes!(health));
+pub async fn serve_openai<A, R>(interface: A, task_router: R) -> OpenAiResult<()>
+where
+    A: ToSocketAddrs,
+    R: Into<OpenApiRouter>,
+{
+    // Default routes
+    let router = OpenApiRouter::with_openapi(ApiDoc::openapi())
+        .routes(routes!(health))
+        .nest("/api/v1", task_router.into());
 
     let (router, api) = router.split_for_parts();
+
+    // Documentation route
     let router = router.merge(Scalar::with_url("/docs", api));
 
-    axum::serve(listener, router).await?;
-
+    let listener = TcpListener::bind(interface).await?;
+    let handler = axum::serve(listener, router).await?;
     Ok(())
 }
 
 #[cfg(feature = "python")]
 pub mod python {
+    use crate::openai::audio::transcription::{
+        TranscriptionRequest, TranscriptionResponse, TranscriptionRouter,
+    };
     use crate::openai::serve_openai;
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
+    use hfendpoints_core::{Endpoint, Handler};
     use pyo3::prelude::*;
+    use std::sync::Arc;
+    use std::thread::JoinHandle;
+    use std::time::Duration;
     use tokio::runtime::Builder;
+    use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
+    use tokio::time::sleep;
 
     macro_rules! py_openai_endpoint_impl {
-        ($pyname: ident, $name: literal) => {
-            #[pyclass(name = $name, subclass)]
-            pub struct $pyname {}
+        ($name: ident, $router: ident, $request: ident, $response: ident) => {
+            pub struct PyHandler {
+                // Python allocated object with `Handler` protocol implementation
+                inner: PyObject,
+            }
+
+            impl Handler for PyHandler {
+                type Request = TranscriptionRequest;
+                type Response = TranscriptionResponse;
+
+                async fn on_request(&mut self, _request: Self::Request) -> Self::Response {
+                    sleep(Duration::from_secs(2)).await;
+
+                    TranscriptionResponse::Text(String::from("Coucou"))
+                }
+            }
+
+            #[pyclass]
+            pub struct $name {
+                handler: Arc<PyHandler>,
+            }
+
+            impl Endpoint for $name {
+                fn spawn_handler(&self) -> JoinHandle<()> {
+                    std::thread::spawn(|| {
+                        std::thread::sleep(Duration::from_secs(10));
+                    })
+                }
+            }
 
             #[pymethods]
-            impl $pyname {
+            impl $name {
                 #[new]
-                pub fn new() -> PyResult<Self> {
-                    Ok(Self {})
+                #[pyo3(signature = (handler,))]
+                pub fn new(handler: PyObject) -> PyResult<Self> {
+                    Ok(Self {
+                        handler: Arc::new(PyHandler { inner: handler }),
+                    })
                 }
 
                 #[pyo3(signature = (interface, port))]
@@ -77,9 +123,14 @@ pub mod python {
                         .build()
                         .expect("Failed to create runtime");
 
+                    // IPC between the front running the API and the back executing the inference
+                    let (sender, _receiver) =
+                        unbounded_channel::<($request, UnboundedSender<$response>)>();
+
                     // Spawn the root task, scheduling all the underlying
                     rt.block_on(async move {
-                        if let Err(err) = serve_openai((interface, port)).await {
+                        // let handler = Arc::clone(&self.handler);
+                        if let Err(err) = serve_openai((interface, port), $router(sender)).await {
                             println!("Failed to start OpenAi compatible endpoint: {err}");
                         };
                     });
@@ -91,15 +142,17 @@ pub mod python {
     }
 
     py_openai_endpoint_impl!(
-        PyAutomaticSpeechRecognitionEndpoint,
-        "AutomaticSpeechRecognitionEndpoint"
+        AutomaticSpeechRecognitionEndpoint,
+        TranscriptionRouter,
+        TranscriptionRequest,
+        TranscriptionResponse
     );
 
     /// Bind hfendpoints.openai submodule into the exported Python wheel
     pub fn bind<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
         let module = ImportablePyModuleBuilder::new(py, name)?
             .defaults()?
-            .add_class::<PyAutomaticSpeechRecognitionEndpoint>()?
+            .add_submodule(&crate::openai::audio::bind(py, &format!("{name}.audio"))?)?
             .finish();
 
         Ok(module)

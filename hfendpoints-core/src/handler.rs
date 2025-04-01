@@ -1,14 +1,5 @@
-pub trait HandlerFactory {
-    type Error;
-
-    /// Express the type for incoming requests getting through the endpoint
-    type Request;
-
-    /// Express the type for outgoing responses from the endpoint
-    type Response;
-
-    fn create(&self) -> impl Handler<Request = Self::Request, Response = Self::Response>;
-}
+use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::task::JoinError;
 
 ///
 pub trait Handler {
@@ -32,12 +23,17 @@ pub trait Handler {
     -> impl Future<Output = Self::Response> + Send;
 }
 
-// pub async fn spawn_handler<H: HandlerFactory>(
-//     factory: H,
-//     receiver: Receiver<String>,
-// ) -> Result<(), JoinError> {
-//     tokio::spawn(async || {
-//         let handler = factory.create();
-//     })
-//     .await
-// }
+pub async fn spawn_handler<I: Send + 'static, O: Send + 'static>(
+    mut receiver: Receiver<(I, Sender<O>)>,
+) -> Result<(), JoinError> {
+    tokio::spawn(async move {
+        'outer: loop {
+            if let Some((request, responses_channel)) = receiver.recv().await {
+                println!("Received request");
+            } else {
+                break 'outer;
+            }
+        }
+    })
+    .await
+}

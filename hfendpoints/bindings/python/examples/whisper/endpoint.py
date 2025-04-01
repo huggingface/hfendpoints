@@ -2,24 +2,25 @@ import asyncio
 import logging
 from asyncio import AbstractEventLoop
 
-from hfendpoints.hfendpoints.openai import AutomaticSpeechRecognitionEndpoint
+from hfendpoints import Handler
+from hfendpoints.openai.audio import AutomaticSpeechRecognitionEndpoint
 
 
-# class WhisperHandler(Handler):
-#
-#     def __new__(cls, model_id_or_path: str, ):
-#         return super().__new__(cls, model_id_or_path)
-#
-#     async def __call__(self, request):
-#         print(f"call: {request}")
+class WhisperHandler(Handler[object, object]):
 
+    def __init__(self, model_id_or_path: str):
+        super().__init__(model_id_or_path)
+        print(f"New handler: {model_id_or_path}")
 
-class WhisperEndpoint(AutomaticSpeechRecognitionEndpoint):
-    pass
+    def __post_init__(self, context):
+        pass
+
+    async def __call__(self, request: object, ctx) -> object:
+        print(f"call: {request}, context: {ctx}")
 
 
 async def entrypoint(loop: AbstractEventLoop):
-    endpoint = WhisperEndpoint()
+    endpoint = AutomaticSpeechRecognitionEndpoint(WhisperHandler("/repository"))
     await loop.run_in_executor(None, endpoint.run, "0.0.0.0", 8000)
 
 

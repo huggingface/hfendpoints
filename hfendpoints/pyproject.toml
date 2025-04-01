@@ -13,8 +13,9 @@ dependencies = []
 hfendpoints = "hfendpoints:main"
 
 [tool.maturin]
-module-name = "hfendpoints"
+module-name = "hfendpoints._hfendpoints"
 python-packages = ["bindings/python"]
+python-source = "bindings/python"
 features = ["pyo3/extension-module"]
 
 [build-system]
