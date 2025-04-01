@@ -4,7 +4,6 @@ members = [
     "hfendpoints",
     "hfendpoints-binding-python",
     "hfendpoints-core",
-    "hfendpoints-transports",
     "hfendpoints-transports-axum"
 ]
 
