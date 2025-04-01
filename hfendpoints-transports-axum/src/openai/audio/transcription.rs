@@ -271,7 +271,7 @@ impl TranscriptionRequest {
     )
 )]
 pub async fn transcribe(
-    State(_ctx): State<EndpointContext<TranscriptionRequest, TranscriptionResponse>>,
+    State(ctx): State<EndpointContext<TranscriptionRequest, TranscriptionResponse>>,
     multipart: Multipart,
 ) -> OpenAiResult<Json<&'static str>> {
     let request = TranscriptionRequest::try_from_multipart(multipart).await?;
@@ -280,6 +280,8 @@ pub async fn transcribe(
         &request.content_type,
         request.file.len() / 1024
     );
+
+    let _ = ctx.schedule(request);
     Ok(Json::from("Hello World"))
 }
 

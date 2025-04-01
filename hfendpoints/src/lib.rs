@@ -11,6 +11,8 @@ mod python {
         // Print Rust logs in Python's ones
         // pyo3_log::init();
 
+        tracing_subscriber::fmt::init();
+
         let name = m.name()?.extract::<String>()?;
 
         // hfendpoints

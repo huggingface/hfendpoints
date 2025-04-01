@@ -10,6 +10,7 @@ hfendpoints-transports = { path = "../hfendpoints-transports" }
 hfendpoints-transports-axum = { path = "../hfendpoints-transports-axum" }
 pyo3 = { workspace = true, optional = true, features = ["extension-module"] }
 pyo3-log = { version = "0.12.2", optional = true }
+tracing-subscriber = "0.3"
 
 [features]
 default = []

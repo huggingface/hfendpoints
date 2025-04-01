@@ -68,7 +68,7 @@ pub mod python {
     use hfendpoints_core::{Endpoint, Handler};
     use pyo3::prelude::*;
     use std::sync::Arc;
-    use std::thread::JoinHandle;
+    use std::thread::{spawn, JoinHandle};
     use std::time::Duration;
     use tokio::runtime::Builder;
     use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
@@ -87,7 +87,6 @@ pub mod python {
 
                 async fn on_request(&mut self, _request: Self::Request) -> Self::Response {
                     sleep(Duration::from_secs(2)).await;
-
                     TranscriptionResponse::Text(String::from("Coucou"))
                 }
             }
@@ -124,17 +123,28 @@ pub mod python {
                         .expect("Failed to create runtime");
 
                     // IPC between the front running the API and the back executing the inference
-                    let (sender, _receiver) =
+                    let (sender, mut receiver) =
                         unbounded_channel::<($request, UnboundedSender<$response>)>();
+
+                    let inference_handle = spawn(move || {
+                        println!("Spawning inference thread");
+                        'outer: loop {
+                            if let Some(request) = receiver.blocking_recv() {
+                                println!("Received request");
+                            } else {
+                                break 'outer;
+                            }
+                        }
+                    });
 
                     // Spawn the root task, scheduling all the underlying
                     rt.block_on(async move {
-                        // let handler = Arc::clone(&self.handler);
                         if let Err(err) = serve_openai((interface, port), $router(sender)).await {
                             println!("Failed to start OpenAi compatible endpoint: {err}");
                         };
                     });
 
+                    let _ = inference_handle.join();
                     Ok(())
                 }
             }

@@ -1,4 +1,4 @@
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 /// Store some information about the context in which the endpoint runs
 #[derive(Clone)]
@@ -11,6 +11,15 @@ pub struct EndpointContext<I, O> {
 impl<I, O> EndpointContext<I, O> {
     pub fn new(ipc: UnboundedSender<(I, UnboundedSender<O>)>) -> Self {
         Self { ipc }
+    }
+
+    pub fn schedule(&self, request: I) -> UnboundedReceiver<O> {
+        let (sender, receiver) = unbounded_channel();
+        self.ipc
+            .send((request, sender))
+            .expect("Failed to send request");
+
+        receiver
     }
 
     // ///
