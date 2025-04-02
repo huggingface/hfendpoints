@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
 hfendpoints-core = { path = "../hfendpoints-core", optional = true }
-hfendpoints-transports-axum = { path = "../hfendpoints-transports-axum" }
+hfendpoints-openai = { path = "../hfendpoints-openai" }
 pyo3 = { workspace = true, optional = true, features = ["auto-initialize", "extension-module"] }
 pyo3-log = { version = "0.12.2", optional = true }
 tracing-subscriber = "0.3"
@@ -18,5 +18,5 @@ python = [
     "pyo3-log",
     "hfendpoints-binding-python",
     "hfendpoints-core/python",
-    "hfendpoints-transports-axum/python"
+    "hfendpoints-openai/python"
 ]

@@ -8,7 +8,7 @@ use utoipa_scalar::{Scalar, Servable};
 pub(crate) mod audio;
 mod error;
 
-use crate::openai::audio::{AUDIO_DESC, AUDIO_TAG};
+use crate::audio::{AUDIO_DESC, AUDIO_TAG};
 use error::OpenAiError;
 
 type OpenAiResult<T> = Result<T, OpenAiError>;
@@ -58,12 +58,17 @@ where
     Ok(())
 }
 
+pub trait EndpointRouter {
+    type Request;
+    type Response;
+}
+
 #[cfg(feature = "python")]
 pub mod python {
-    use crate::openai::audio::transcription::{
+    use crate::audio::transcription::{
         TranscriptionRequest, TranscriptionResponse, TranscriptionRouter,
     };
-    use crate::openai::serve_openai;
+    use crate::serve_openai;
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
     use hfendpoints_core::{spawn_handler, Endpoint, Error, Handler};
     use pyo3::prelude::*;
@@ -166,7 +171,7 @@ pub mod python {
     pub fn bind<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
         let module = ImportablePyModuleBuilder::new(py, name)?
             .defaults()?
-            .add_submodule(&crate::openai::audio::bind(py, &format!("{name}.audio"))?)?
+            .add_submodule(&crate::audio::bind(py, &format!("{name}.audio"))?)?
             .finish();
 
         Ok(module)

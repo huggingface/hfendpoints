@@ -4,7 +4,7 @@ members = [
     "hfendpoints",
     "hfendpoints-binding-python",
     "hfendpoints-core",
-    "hfendpoints-transports-axum"
+    "hfendpoints-openai"
 ]
 
 [workspace.dependencies]

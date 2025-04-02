@@ -1,7 +1,7 @@
-use crate::openai::audio::transcription::{
+use crate::audio::transcription::{
     Segment, Transcription, TranscriptionRequest, TranscriptionResponse, VerboseTranscription,
 };
-use crate::openai::python::AutomaticSpeechRecognitionEndpoint;
+use crate::python::AutomaticSpeechRecognitionEndpoint;
 use hfendpoints_binding_python::ImportablePyModuleBuilder;
 use pyo3::prelude::PyModule;
 use pyo3::{Bound, PyResult, Python};

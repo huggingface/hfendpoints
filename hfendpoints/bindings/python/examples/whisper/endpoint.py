@@ -1,7 +1,8 @@
 import logging
 
 from hfendpoints import Handler
-from hfendpoints.openai.audio import AutomaticSpeechRecognitionEndpoint, TranscriptionRequest, TranscriptionResponse
+from hfendpoints.openai.audio import AutomaticSpeechRecognitionEndpoint, TranscriptionRequest, TranscriptionResponse, \
+    Segment, Transcription, VerboseTranscription
 
 
 class WhisperHandler(Handler[TranscriptionRequest, TranscriptionResponse]):

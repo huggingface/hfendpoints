@@ -1,7 +1,7 @@
 #[cfg(feature = "python")]
 mod python {
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
-    use hfendpoints_transports_axum::openai;
+    use hfendpoints_openai as openai;
     use pyo3::prelude::*;
 
     pub const __VERSION__: &str = env!("CARGO_PKG_VERSION");
