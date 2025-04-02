@@ -56,6 +56,107 @@ pub struct Segment {
     no_speech_prob: f32,
 }
 
+#[derive(Default)]
+pub struct SegmentBuilder {
+    id: Option<u16>,
+    start: Option<f32>,
+    end: Option<f32>,
+    seek: Option<u16>,
+    temperature: Option<f32>,
+    text: Option<String>,
+    tokens: Option<Vec<u32>>,
+    avg_logprob: Option<f32>,
+    compression_ratio: Option<f32>,
+    no_speech_prob: Option<f32>,
+}
+
+impl SegmentBuilder {
+    pub fn id(mut self, id: u16) -> Self {
+        self.id = Some(id);
+        self
+    }
+
+    pub fn start(mut self, start: f32) -> Self {
+        self.start = Some(start);
+        self
+    }
+
+    pub fn end(mut self, end: f32) -> Self {
+        self.end = Some(end);
+        self
+    }
+
+    pub fn seek(mut self, seek: u16) -> Self {
+        self.seek = Some(seek);
+        self
+    }
+
+    pub fn temperature(mut self, temperature: f32) -> Self {
+        self.temperature = Some(temperature);
+        self
+    }
+
+    pub fn text(mut self, text: String) -> Self {
+        self.text = Some(text);
+        self
+    }
+
+    pub fn tokens(mut self, tokens: Vec<u32>) -> Self {
+        self.tokens = Some(tokens);
+        self
+    }
+
+    pub fn avg_logprob(mut self, avg_logprob: f32) -> Self {
+        self.avg_logprob = Some(avg_logprob);
+        self
+    }
+
+    pub fn compression_ratio(mut self, compression_ratio: f32) -> Self {
+        self.compression_ratio = Some(compression_ratio);
+        self
+    }
+
+    pub fn no_speech_prob(mut self, no_speech_prob: f32) -> Self {
+        self.no_speech_prob = Some(no_speech_prob);
+        self
+    }
+
+    pub fn build(self) -> OpenAiResult<Segment> {
+        Ok(Segment {
+            id: self.id.ok_or(OpenAiError::Validation(String::from(
+                "Segment::id is not set",
+            )))?,
+            start: self.start.ok_or(OpenAiError::Validation(String::from(
+                "Segment::start is not set",
+            )))?,
+            end: self.end.ok_or(OpenAiError::Validation(String::from(
+                "Segment::end is not set",
+            )))?,
+            seek: self.seek.unwrap_or(0),
+            temperature: self
+                .temperature
+                .ok_or(OpenAiError::Validation(String::from(
+                    "Segment::temperature is not set",
+                )))?,
+            text: self.text.ok_or(OpenAiError::Validation(String::from(
+                "Segment::text is not set",
+            )))?,
+            tokens: self.tokens.ok_or(OpenAiError::Validation(String::from(
+                "Segment::tokens is not set",
+            )))?,
+            avg_logprob: self.avg_logprob.unwrap_or(0.0),
+            compression_ratio: self.compression_ratio.unwrap_or(0.0),
+            no_speech_prob: self.no_speech_prob.unwrap_or(0.0),
+        })
+    }
+}
+
+impl Segment {
+    pub fn builder() -> SegmentBuilder {
+        SegmentBuilder::default()
+    }
+}
+
 /// Represents a transcription response returned by model, based on the provided input.
 #[cfg_attr(feature = "python", pyclass)]
 #[cfg_attr(debug_assertions, derive(Debug))]
@@ -321,8 +422,34 @@ impl Into<OpenApiRouter> for TranscriptionRouter {
 
 #[cfg(feature = "python")]
 mod python {
-    use crate::audio::transcription::{Transcription, TranscriptionResponse, VerboseTranscription};
+    use crate::audio::transcription::{
+        Segment, Transcription, TranscriptionResponse, VerboseTranscription,
+    };
     use pyo3::prelude::*;
+
+    #[pymethods]
+    impl Segment {}
+
+    #[pymethods]
+    impl Transcription {
+        #[new]
+        pub fn new(text: String) -> Self {
+            Self { text }
+        }
+    }
+
+    #[pymethods]
+    impl VerboseTranscription {
+        #[new]
+        pub fn new(text: String, duration: f32, language: String, segments: Vec<Segment>) -> Self {
+            Self {
+                text,
+                duration,
+                language,
+                segments,
+            }
+        }
+    }
 
     #[pymethods]
     impl TranscriptionResponse {
@@ -345,7 +472,7 @@ mod python {
 
 #[cfg(test)]
 mod tests {
-    use crate::audio::transcription::{Delta, Done, StreamEvent};
+    use crate::audio::transcription::{Delta, Done, Segment, StreamEvent};
 
     #[test]
     fn serialize_stream_event_delta() {
@@ -373,5 +500,61 @@ mod tests {
             &done_json,
             r#"{"type":"transcript.text.done","text":"Hello world"}"#
         );
+    }
+
+    #[test]
+    fn segment_builder_all_field_set() {
+        if let Ok(segment) = Segment::builder()
+            .id(1)
+            .start(2.2)
+            .end(3.8)
+            .seek(7)
+            .temperature(1.0)
+            .text(String::from("Hello"))
+            .tokens(vec![1, 2, 3])
+            .avg_logprob(2.71)
+            .compression_ratio(1.2)
+            .no_speech_prob(0.1)
+            .build()
+        {
+            assert_eq!(segment.id, 1);
+            assert_eq!(segment.start, 2.2);
+            assert_eq!(segment.end, 3.8);
+            assert_eq!(segment.seek, 7);
+            assert_eq!(segment.temperature, 1.0);
+            assert_eq!(segment.text, String::from("Hello"));
+            assert_eq!(segment.tokens, vec![1, 2, 3]);
+            assert_eq!(segment.avg_logprob, 2.71);
+            assert_eq!(segment.compression_ratio, 1.2);
+            assert_eq!(segment.no_speech_prob, 0.1);
+        } else {
+            panic!("Failed to create segment");
+        }
+    }
+
+    #[test]
+    fn segment_builder_with_default_fields() {
+        if let Ok(segment) = Segment::builder()
+            .id(1)
+            .start(2.2)
+            .end(3.8)
+            .temperature(1.0)
+            .text(String::from("Hello"))
+            .tokens(vec![1, 2, 3])
+            .build()
+        {
+            assert_eq!(segment.id, 1);
+            assert_eq!(segment.start, 2.2);
+            assert_eq!(segment.end, 3.8);
+            assert_eq!(segment.seek, 0);
+            assert_eq!(segment.temperature, 1.0);
+            assert_eq!(segment.text, String::from("Hello"));
+            assert_eq!(segment.tokens, vec![1, 2, 3]);
+            assert_eq!(segment.avg_logprob, 0.0);
+            assert_eq!(segment.compression_ratio, 0.0);
+            assert_eq!(segment.no_speech_prob, 0.0);
+        } else {
+            panic!("Failed to create segment");
+        }
     }
 }
