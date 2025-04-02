@@ -171,7 +171,7 @@ pub mod python {
     pub fn bind<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
         let module = ImportablePyModuleBuilder::new(py, name)?
             .defaults()?
-            .add_submodule(&crate::audio::bind(py, &format!("{name}.audio"))?)?
+            .add_submodule(&crate::audio::python::bind(py, &format!("{name}.audio"))?)?
             .finish();
 
         Ok(module)
