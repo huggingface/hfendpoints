@@ -9,7 +9,7 @@ pyo3 = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
 thiserror = "2.0"
 tokio = { workspace = true, features = ["sync"] }
-log = "0.4.27"
+tracing = "0.1"
 
 [features]
 default = []

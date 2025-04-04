@@ -1,6 +1,6 @@
-use std::thread::JoinHandle;
+use crate::Error;
 
 ///
-pub trait Endpoint {
-    fn spawn_handler(&self) -> JoinHandle<()>;
+pub trait Endpoint<A> {
+    fn serve(&self, binding: A) -> impl Future<Output=Result<(), Error>> + Send;
 }

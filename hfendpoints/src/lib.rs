@@ -8,9 +8,6 @@ mod python {
 
     #[pymodule]
     pub fn _hfendpoints(py: Python, m: Bound<'_, PyModule>) -> PyResult<()> {
-        // Print Rust logs in Python's ones
-        // pyo3_log::init();
-
         tracing_subscriber::fmt::init();
 
         let name = m.name()?.extract::<String>()?;
@@ -18,7 +15,6 @@ mod python {
         // hfendpoints
         let pymodule_hfendpoints = ImportablePyModuleBuilder::from(m)
             .defaults()?
-            // .add_submodule(&hfendpoints_core::python::bind(py, &name)?)?
             .add_submodule(&openai::python::bind(py, &format!("{name}.openai"))?)?
             .finish();
 

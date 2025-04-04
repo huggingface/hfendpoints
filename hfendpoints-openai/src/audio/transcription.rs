@@ -1,6 +1,6 @@
 use crate::audio::AUDIO_TAG;
 use crate::{OpenAiError, OpenAiResult};
-use axum::body::{Bytes};
+use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Multipart, State};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -405,7 +405,7 @@ pub async fn transcribe(
 /// [OpenAi Platform compatible Transcription endpoint](https://platform.openai.com/docs/api-reference/audio/createTranscription)
 #[derive(Clone)]
 pub struct TranscriptionRouter(
-    pub  UnboundedSender<(
+    pub UnboundedSender<(
         TranscriptionRequest,
         UnboundedSender<Result<TranscriptionResponse, Error>>,
     )>,
@@ -421,10 +421,12 @@ impl Into<OpenApiRouter> for TranscriptionRouter {
 
 #[cfg(feature = "python")]
 mod python {
-    use crate::audio::transcription::{
-        Segment, Transcription, TranscriptionResponse, VerboseTranscription,
-    };
+    use crate::audio::transcription::{Segment, Transcription, TranscriptionRequest, TranscriptionResponse, VerboseTranscription};
+    use hfendpoints_binding_python::fill_view_from_readonly_data;
+    use pyo3::ffi::Py_buffer;
     use pyo3::prelude::*;
+    use std::ffi::CString;
+    use tracing::debug;
 
     #[pymethods]
     impl Segment {}
@@ -447,6 +449,20 @@ mod python {
                 language,
                 segments,
             }
+        }
+    }
+
+    #[pymethods]
+    impl TranscriptionRequest {
+        pub unsafe fn __getbuffer__(slf: Bound<'_, Self>, buffer: *mut Py_buffer, flags: i32) -> PyResult<()> {
+            debug!("Acquiring a memoryview over audio data (flags={})", flags);
+            unsafe { fill_view_from_readonly_data(buffer, flags, &slf.borrow().file, slf.into_any()) }
+        }
+
+        pub unsafe fn __releasebuffer__(&self, buffer: *mut Py_buffer) {
+            debug!("Releasing Python memoryview");
+            // Release memory held by the format string
+            drop(unsafe { CString::from_raw((*buffer).format) });
         }
     }
 

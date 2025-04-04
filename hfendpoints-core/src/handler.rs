@@ -1,8 +1,7 @@
 use crate::Error;
-use log::{error, info};
 use std::sync::Arc;
-use std::thread::{spawn, JoinHandle};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tracing::{error, info, span, Instrument, Level};
 
 ///
 pub trait Handler {
@@ -22,28 +21,32 @@ pub trait Handler {
     /// ```
     ///
     /// ```
-    fn on_request(&self, request: Self::Request) -> Result<Self::Response, Error>;
+    fn on_request(&self, request: Self::Request) -> impl Future<Output=Result<Self::Response, Error>> + Send;
 }
 
-pub fn spawn_handler<I, O, H>(
+pub async fn wait_for_requests<I, O, H>(
     mut ingress: UnboundedReceiver<(I, UnboundedSender<Result<O, Error>>)>,
     background_handler: Arc<H>,
-) -> JoinHandle<()>
+)
 where
     I: Send + 'static,
     O: Send + 'static,
-    H: Handler<Request = I, Response = O> + Send + Sync + 'static,
+    H: Handler<Request=I, Response=O> + Send + Sync + 'static,
 {
-    spawn(move || {
-        loop {
-            if let Some((request, egress)) = ingress.blocking_recv() {
-                info!("[LOOPER] Received request");
-                let response = background_handler.on_request(request);
-                info!("[LOOPER] Response ready");
+    'looper: loop {
+        if let Some((request, egress)) = ingress.recv().await {
+            info!("[LOOPER] Received request");
+            let background_handler = Arc::clone(&background_handler);
+            let sp_on_request = span!(Level::DEBUG, "on_request");
+            async move {
+                let response = background_handler.on_request(request).await;
                 if let Err(e) = egress.send(response) {
                     error!("Failed to send back response to client: {e}");
                 }
-            }
+            }.instrument(sp_on_request).await;
+        } else {
+            info!("[LOOPER] received a termination notice from ingress channel, exiting");
+            break 'looper;
         }
-    })
+    }
 }
