@@ -75,11 +75,6 @@ where
     Ok(())
 }
 
-pub trait EndpointRouter {
-    type Request;
-    type Response;
-}
-
 #[cfg(feature = "python")]
 pub mod python {
     use hfendpoints_binding_python::tokio::create_multithreaded_runtime;
