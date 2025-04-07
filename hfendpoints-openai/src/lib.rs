@@ -70,17 +70,21 @@ pub mod python {
     use pyo3::prelude::*;
     use pyo3::prepare_freethreaded_python;
     use pyo3_async_runtimes::tokio::init;
+    use pyo3_async_runtimes::TaskLocals;
     use std::sync::Arc;
+    use std::process;
+    use tokio::sync::OnceCell;
+
+    pub(crate) static TASK_LOCALS: OnceCell<TaskLocals> = OnceCell::const_new();
 
     macro_rules! impl_pyhandler {
         ($request: ident, $response: ident) => {
+            use crate::python::TASK_LOCALS;
             use hfendpoints_core::{Error, Handler};
             use tracing::{debug, info};
             use tokio::sync::OnceCell;
             use pyo3_async_runtimes::TaskLocals;
-
-            static TASK_LOCALS: OnceCell<TaskLocals> = OnceCell::const_new();
-
+            use std::process;
 
             /// Wraps the underlying, Python's heap-allocated, object in a GIL independent way
             /// to be shared between threads.
@@ -99,30 +103,28 @@ pub mod python {
                 type Response = $response;
 
                 async fn on_request(&self, request: Self::Request) -> Result<Self::Response, Error> {
-                    info!("[FFI] Calling Python Handler");
-                    let _ = TASK_LOCALS.get_or_try_init(|| async {
-                        Python::with_gil(|py| {
-                            pyo3_async_runtimes::tokio::get_current_locals(py)
-                        })
-                    }).await?;
+                    debug!("[FFI] Calling Python Handler");
 
-                    let response = Python::with_gil(|py| {
-                        debug!("[NATIVE] Python's GIL acquired");
+                    // Retrieve the current event loop
+                    let locals = Python::with_gil(|py| TASK_LOCALS.get().unwrap().clone_ref(py));
 
+                    // Create the coroutine on Python side to await through tokio
+                    let coro = Python::with_gil(|py| {
                         let py_coro_call = self.inner
-                            .bind(py)
-                            .call((request, PyNone::get(py)), None)?;
+                            .call(py, (request, PyNone::get(py)), None)?
+                            .into_bound(py);
 
-
-
-                        let coro = pyo3_async_runtimes::tokio::into_future(py_coro_call);
                         debug!("[NATIVE] asyncio Handler's coroutine (__call__) created");
 
-                        coro
+                        pyo3_async_runtimes::into_future_with_locals(&locals, py_coro_call)
+                    }).inspect_err(|err| {
+                        error!("Failed to retrieve __call__ coroutine: {err}");
                     })?;
 
-                    // We are delegating the future polling back to Rust
-                    let response = response.await?;
+                    // Schedule the coroutine
+                    let response = pyo3_async_runtimes::tokio::scope(locals, coro).await.inspect_err(|err| {
+                       error!("Failed to execute __call__: {err}");
+                    })?;
 
                     debug!("[NATIVE] asyncio Handler's coroutine (__call__) done");
 
@@ -130,59 +132,6 @@ pub mod python {
                     Ok(Python::with_gil(|py| response.extract::<Self::Response>(py))?)
                 }
             }
-
-            // #[pyclass]
-            // pub struct $name {
-            //     handler: Arc<PyHandler>,
-            // }
-            //
-            // #[pymethods]
-            // impl $name {
-            //     #[new]
-            //     #[pyo3(signature = (handler,))]
-            //     pub fn new(handler: PyObject) -> PyResult<Self> {
-            //         Ok(Self {
-            //             handler: Arc::new(PyHandler { inner: handler }),
-            //         })
-            //     }
-
-                // #[pyo3(signature = (interface, port))]
-                // pub fn run(&self, py: Python<'_>, interface: String, port: u16) -> PyResult<()> {
-                //     py.allow_threads(|| {
-                //         // Global tokio runtime behind Python as main thread
-                //         debug!("Initializing tokio runtime from Python");
-                //         init_tokio_runtime(create_multithreaded_runtime());
-                //         let runtime = get_runtime();
-                //
-                //         // IPC between the front running the API and the back executing the inference
-                //         let background_handler = Arc::clone(&self.handler);
-                //         let (sender, receiver) = unbounded_channel::<(
-                //             $request,
-                //             UnboundedSender<Result<$response, Error>>,
-                //         )>();
-                //
-                //         info!("[LOOPER] Spawning inference thread");
-                //         let handler_loop_handle = runtime.spawn(
-                //             wait_for_requests(receiver, background_handler)
-                //         );
-                //
-                //         info!("[LOOPER] Spawned inference thread");
-                //
-                //         // Spawn the root task, scheduling all the underlying
-                //         runtime.block_on(async move {
-                //             if let Err(err) = try_join!(serve_openai((interface, port), $router(sender)))
-                //             {
-                //                 error!("Failed to start OpenAi compatible endpoint: {err}");
-                //             };
-                //         });
-                //
-                //         // Wait for the inference thread to finish and cleanup
-                //         let _ = runtime.block_on(handler_loop_handle);
-                //
-                //         Ok(())
-                //     })
-                // }
-            // }
         };
     }
 
@@ -212,7 +161,7 @@ pub mod python {
 
                     // Handler in another thread
                     let handler = Arc::clone(&self.0);
-                    let _ = spawn(wait_for_requests(receiver, handler));
+                    let _ = pyo3_async_runtimes::tokio::get_runtime().spawn(wait_for_requests(receiver, handler));
 
                     info!("Starting OpenAi compatible endpoint at {}:{}", &inet_address.0, &inet_address.1);
                     serve_openai(inet_address, router).await.inspect_err(|err|{
@@ -247,9 +196,15 @@ pub mod python {
 
 
     async fn serve(endpoint: Arc<PyObject>, interface: String, port: u16) -> PyResult<()> {
+        let locals = TASK_LOCALS.get_or_try_init(|| async {
+            Python::with_gil(|py| {
+                pyo3_async_runtimes::tokio::get_current_locals(py)
+            })
+        }).await?;
+
         Python::with_gil(|py| {
             let coro = endpoint.bind(py).call_method1("_serve_", (interface, port))?;
-            pyo3_async_runtimes::tokio::into_future(coro)
+            pyo3_async_runtimes::into_future_with_locals(&locals, coro)
         })?.await?;
         Ok(())
     }
@@ -259,15 +214,29 @@ pub mod python {
     fn run(endpoint: PyObject, interface: String, port: u16) -> PyResult<()> {
         prepare_freethreaded_python();
 
+        println!("[THREAD] run/ -> {}", process::id());
+
         // Initialize the tokio runtime and bind this runtime to the tokio <> asyncio compatible layer
         init(create_multithreaded_runtime());
 
         let endpoint = Arc::new(endpoint);
         Python::with_gil(|py| {
+            println!("[THREAD] run/with_gil/ -> {}", process::id());
+
+            // Initialize asyncio
+            // let asyncio = py.import("asyncio")?;
+            // let event_loop = asyncio.call_method0("new_event_loop")?;
+            // asyncio.call_method1("set_event_loop", (event_loop,))?;
+
             py.allow_threads(|| {
+                println!("[THREAD] run/with_gil/allow_thread -> {}", process::id());
+
                 let endpoint = Arc::clone(&endpoint);
                 pyo3_async_runtimes::tokio::get_runtime().block_on(async {
+                    println!("[THREAD] run/with_gil/allow_thread/block_on -> {}", process::id());
+
                     Python::with_gil(|inner| {
+                        println!("[THREAD] run/with_gil/allow_thread/block_on/run -> {}", process::id());
                         pyo3_async_runtimes::tokio::run(inner, serve(endpoint, interface, port))
                     })?;
                     Ok::<_, PyErr>(())
