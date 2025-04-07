@@ -4,6 +4,7 @@ use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Multipart, State};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use axum_extra::TypedHeader;
 use hfendpoints_core::{EndpointContext, Error};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -13,6 +14,7 @@ use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
+use crate::headers::RequestId;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 use tracing::instrument;
@@ -376,6 +378,7 @@ impl TranscriptionRequest {
     }
 }
 
+#[instrument(skip(ctx, multipart))]
 #[utoipa::path(
     post,
     path = "/audio/transcriptions",
@@ -387,6 +390,7 @@ impl TranscriptionRequest {
 )]
 pub async fn transcribe(
     State(ctx): State<EndpointContext<TranscriptionRequest, TranscriptionResponse>>,
+    request_id: TypedHeader<RequestId>,
     multipart: Multipart,
 ) -> OpenAiResult<TranscriptionResponse> {
     let request = TranscriptionRequest::try_from_multipart(multipart).await?;

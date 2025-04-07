@@ -1,8 +1,13 @@
 use crate::audio::{AUDIO_DESC, AUDIO_TAG};
+use axum::http::HeaderName;
 use axum::Json;
 use error::OpenAiError;
 use std::fmt::Debug;
 use tokio::net::{TcpListener, ToSocketAddrs};
+use tower::ServiceBuilder;
+use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
+use tower_http::trace::TraceLayer;
+
 use tracing::instrument;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
@@ -11,6 +16,7 @@ use utoipa_scalar::{Scalar, Servable};
 
 pub(crate) mod audio;
 mod error;
+mod headers;
 
 type OpenAiResult<T> = Result<T, OpenAiError>;
 
@@ -45,12 +51,21 @@ where
     A: ToSocketAddrs + Debug,
     R: Into<OpenApiRouter>,
 {
-    // Default routes
-    let router = OpenApiRouter::with_openapi(ApiDoc::openapi())
-        .routes(routes!(health))
-        .nest("/api/v1", task_router.into());
+    // Correlation-ID middleware (x-request-id)
+    let x_request_id_header_name = HeaderName::from_static("x-request-id");
 
-    let (router, api) = router.split_for_parts();
+    // Default routes
+    let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
+        .nest("/api/v1", task_router.into())
+        .layer(
+            ServiceBuilder::new()
+                .layer(TraceLayer::new_for_http())
+                .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid::default()))
+                .layer(PropagateRequestIdLayer::new(x_request_id_header_name)
+                )
+        )
+        .routes(routes!(health))
+        .split_for_parts();
 
     // Documentation route
     let router = router.merge(Scalar::with_url("/docs", api));
