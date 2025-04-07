@@ -1,7 +1,9 @@
 use crate::audio::{AUDIO_DESC, AUDIO_TAG};
 use axum::Json;
 use error::OpenAiError;
+use std::fmt::Debug;
 use tokio::net::{TcpListener, ToSocketAddrs};
+use tracing::instrument;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
@@ -37,9 +39,10 @@ async fn health() -> Json<&'static str> {
 )]
 struct ApiDoc;
 
+#[instrument(skip(task_router))]
 pub async fn serve_openai<A, R>(interface: A, task_router: R) -> OpenAiResult<()>
 where
-    A: ToSocketAddrs,
+    A: ToSocketAddrs + Debug,
     R: Into<OpenApiRouter>,
 {
     // Default routes
@@ -72,8 +75,8 @@ pub mod python {
     use pyo3_async_runtimes::tokio::init;
     use pyo3_async_runtimes::TaskLocals;
     use std::sync::Arc;
-    use std::process;
     use tokio::sync::OnceCell;
+    use tracing::instrument;
 
     pub(crate) static TASK_LOCALS: OnceCell<TaskLocals> = OnceCell::const_new();
 
@@ -81,7 +84,7 @@ pub mod python {
         ($request: ident, $response: ident) => {
             use crate::python::TASK_LOCALS;
             use hfendpoints_core::{Error, Handler};
-            use tracing::{debug, info};
+            use tracing::{debug, info, instrument};
             use tokio::sync::OnceCell;
             use pyo3_async_runtimes::TaskLocals;
             use std::process;
@@ -102,6 +105,7 @@ pub mod python {
                 type Request = $request;
                 type Response = $response;
 
+                #[instrument(skip_all)]
                 async fn on_request(&self, request: Self::Request) -> Result<Self::Response, Error> {
                     debug!("[FFI] Calling Python Handler");
 
@@ -155,6 +159,8 @@ pub mod python {
             pub(crate) struct $pyname(Arc<$handler>);
 
             impl Endpoint<(String, u16)> for $pyname {
+
+                #[instrument(skip(self))]
                 async fn serve(&self, inet_address: (String, u16)) -> Result<(), Error> {
                     let (sender, receiver) = unbounded_channel();
                     let router = $router { 0: sender };
@@ -174,11 +180,13 @@ pub mod python {
 
             #[pymethods]
             impl $pyname {
+                #[instrument(skip(inner))]
                 #[new]
                 fn new(inner: PyObject) -> Self {
                     Self { 0: Arc::new(PyHandler { inner }) }
                 }
 
+                #[instrument(skip(self))]
                 async fn _serve_(&self, interface: String, port: u16) -> PyResult<()> {
                     if let Err(err) = self.serve((interface, port)).await {
                         error!("Caught error while serving Open Ai compatible endpoint: {err}");
@@ -195,6 +203,7 @@ pub mod python {
     pub(crate) use impl_pyhandler;
 
 
+    #[instrument(skip(endpoint))]
     async fn serve(endpoint: Arc<PyObject>, interface: String, port: u16) -> PyResult<()> {
         let locals = TASK_LOCALS.get_or_try_init(|| async {
             Python::with_gil(|py| {
@@ -210,33 +219,25 @@ pub mod python {
     }
 
     #[pyfunction]
+    #[instrument(skip(endpoint))]
     #[pyo3(name = "run")]
     fn run(endpoint: PyObject, interface: String, port: u16) -> PyResult<()> {
         prepare_freethreaded_python();
-
-        println!("[THREAD] run/ -> {}", process::id());
 
         // Initialize the tokio runtime and bind this runtime to the tokio <> asyncio compatible layer
         init(create_multithreaded_runtime());
 
         let endpoint = Arc::new(endpoint);
         Python::with_gil(|py| {
-            println!("[THREAD] run/with_gil/ -> {}", process::id());
-
             // Initialize asyncio
             // let asyncio = py.import("asyncio")?;
             // let event_loop = asyncio.call_method0("new_event_loop")?;
             // asyncio.call_method1("set_event_loop", (event_loop,))?;
 
             py.allow_threads(|| {
-                println!("[THREAD] run/with_gil/allow_thread -> {}", process::id());
-
                 let endpoint = Arc::clone(&endpoint);
                 pyo3_async_runtimes::tokio::get_runtime().block_on(async {
-                    println!("[THREAD] run/with_gil/allow_thread/block_on -> {}", process::id());
-
                     Python::with_gil(|inner| {
-                        println!("[THREAD] run/with_gil/allow_thread/block_on/run -> {}", process::id());
                         pyo3_async_runtimes::tokio::run(inner, serve(endpoint, interface, port))
                     })?;
                     Ok::<_, PyErr>(())

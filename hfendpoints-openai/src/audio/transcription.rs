@@ -15,6 +15,7 @@ use utoipa_axum::routes;
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
+use tracing::instrument;
 
 /// One segment of the transcribed text and the corresponding details.
 #[cfg_attr(feature = "python", pyclass)]
@@ -301,6 +302,7 @@ pub struct TranscriptionRequest {
 }
 
 impl TranscriptionRequest {
+    #[instrument(skip_all)]
     fn validate(
         file: Option<Bytes>,
         content_type: String,
@@ -339,6 +341,7 @@ impl TranscriptionRequest {
         })
     }
 
+    #[instrument(skip_all)]
     async fn try_from_multipart(mut multipart: Multipart) -> OpenAiResult<Self> {
         let mut file: OpenAiResult<Option<Bytes>> = Ok(None);
         let mut content_type: Option<String> = None;
@@ -426,13 +429,14 @@ mod python {
     use pyo3::ffi::Py_buffer;
     use pyo3::prelude::*;
     use std::ffi::CString;
-    use tracing::debug;
+    use tracing::{debug, instrument};
 
     #[pymethods]
     impl Segment {}
 
     #[pymethods]
     impl Transcription {
+        #[instrument]
         #[new]
         pub fn new(text: String) -> Self {
             Self { text }
@@ -441,6 +445,7 @@ mod python {
 
     #[pymethods]
     impl VerboseTranscription {
+        #[instrument(skip(segments))]
         #[new]
         pub fn new(text: String, duration: f32, language: String, segments: Vec<Segment>) -> Self {
             Self {
@@ -454,11 +459,13 @@ mod python {
 
     #[pymethods]
     impl TranscriptionRequest {
+        #[instrument(skip(slf, buffer))]
         pub unsafe fn __getbuffer__(slf: Bound<'_, Self>, buffer: *mut Py_buffer, flags: i32) -> PyResult<()> {
             debug!("Acquiring a memoryview over audio data (flags={})", flags);
             unsafe { fill_view_from_readonly_data(buffer, flags, &slf.borrow().file, slf.into_any()) }
         }
 
+        #[instrument(skip_all)]
         pub unsafe fn __releasebuffer__(&self, buffer: *mut Py_buffer) {
             debug!("Releasing Python memoryview");
             // Release memory held by the format string
