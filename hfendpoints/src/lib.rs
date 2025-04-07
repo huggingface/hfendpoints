@@ -1,5 +1,6 @@
 #[cfg(feature = "python")]
 mod python {
+    use hfendpoints_audio as audio;
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
     use hfendpoints_openai as openai;
     use pyo3::prelude::*;
@@ -15,6 +16,7 @@ mod python {
         // hfendpoints
         let pymodule_hfendpoints = ImportablePyModuleBuilder::from(m)
             .defaults()?
+            .add_submodule(&audio::python::bind(py, &format!("{name}.audio"))?)?
             .add_submodule(&openai::python::bind(py, &format!("{name}.openai"))?)?
             .finish();
 

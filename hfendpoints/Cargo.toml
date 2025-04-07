@@ -8,6 +8,7 @@ name = "hfendpoints"
 crate-type = ["cdylib"]
 
 [dependencies]
+hfendpoints-audio = { path = "../hfendpoints-audio", optional = true}
 hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
 hfendpoints-core = { path = "../hfendpoints-core", optional = true }
 hfendpoints-openai = { path = "../hfendpoints-openai" }
@@ -21,6 +22,7 @@ default = []
 python = [
     "pyo3",
     "pyo3-log",
+    "hfendpoints-audio/python",
     "hfendpoints-binding-python",
     "hfendpoints-core/python",
     "hfendpoints-openai/python"

@@ -1,0 +1,14 @@
+[package]
+name = "hfendpoints-audio"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
+symphonia = { version = "0.5.4", features = ["all-codecs", "opt-simd"] }
+tracing = { workspace = true }
+pyo3 = { workspace = true, optional = true }
+
+[features]
+default = []
+python = ["pyo3", "hfendpoints-binding-python"]

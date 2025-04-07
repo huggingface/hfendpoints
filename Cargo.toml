@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
-    "hfendpoints",
+    "hfendpoints", "hfendpoints-audio",
     "hfendpoints-binding-python",
     "hfendpoints-core",
     "hfendpoints-openai"
