@@ -1,7 +1,7 @@
 use crate::Error;
 use std::sync::Arc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tracing::{error, info, span, Instrument, Level};
+use tracing::{debug, error, span, warn, Instrument, Level};
 
 ///
 pub trait Handler {
@@ -35,7 +35,7 @@ where
 {
     'looper: loop {
         if let Some((request, egress)) = ingress.recv().await {
-            info!("[LOOPER] Received request");
+            debug!("[LOOPER] Received request");
             let background_handler = Arc::clone(&background_handler);
             let sp_on_request = span!(Level::DEBUG, "on_request");
             async move {
@@ -45,7 +45,7 @@ where
                 }
             }.instrument(sp_on_request).await;
         } else {
-            info!("[LOOPER] received a termination notice from ingress channel, exiting");
+            warn!("[LOOPER] received a termination notice from ingress channel, exiting");
             break 'looper;
         }
     }

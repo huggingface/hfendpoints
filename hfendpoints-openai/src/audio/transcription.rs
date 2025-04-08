@@ -1,4 +1,6 @@
 use crate::audio::AUDIO_TAG;
+use crate::context::Context;
+use crate::headers::RequestId;
 use crate::{OpenAiError, OpenAiResult};
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Multipart, State};
@@ -9,18 +11,16 @@ use hfendpoints_core::{EndpointContext, Error};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tokio::sync::mpsc::UnboundedSender;
+use tracing::instrument;
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
-use crate::context::Context;
-use crate::headers::RequestId;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
-use tracing::instrument;
 
 /// One segment of the transcribed text and the corresponding details.
-#[cfg_attr(feature = "python", pyclass)]
+#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 pub struct Segment {
@@ -160,7 +160,7 @@ impl Segment {
 }
 
 /// Represents a transcription response returned by model, based on the provided input.
-#[cfg_attr(feature = "python", pyclass)]
+#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 pub struct Transcription {
@@ -169,7 +169,7 @@ pub struct Transcription {
 }
 
 /// Represents a verbose json transcription response returned by model, based on the provided input.
-#[cfg_attr(feature = "python", pyclass)]
+#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 pub struct VerboseTranscription {
@@ -186,7 +186,7 @@ pub struct VerboseTranscription {
     segments: Vec<Segment>,
 }
 
-#[cfg_attr(feature = "python", pyclass)]
+#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 #[serde(tag = "type")]
@@ -197,7 +197,7 @@ pub struct Delta {
     // TODO: logprobs -> https://platform.openai.com/docs/api-reference/audio/transcript-text-delta-event#audio/transcript-text-delta-event-logprobs
 }
 
-#[cfg_attr(feature = "python", pyclass)]
+#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 #[serde(tag = "type")]
@@ -208,7 +208,7 @@ pub struct Done {
     // TODO: logprobs -> https://platform.openai.com/docs/api-reference/audio/transcript-text-done-event#audio/transcript-text-done-event-logprobs
 }
 
-#[cfg_attr(feature = "python", pyclass)]
+#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 #[serde(untagged)]
@@ -224,7 +224,7 @@ pub enum StreamEvent {
     Done(Done),
 }
 
-#[cfg_attr(feature = "python", pyclass)]
+#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Copy, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -242,7 +242,7 @@ impl Default for ResponseFormat {
 }
 
 /// The transcription object, a verbose transcription object or a stream of transcript events.
-#[cfg_attr(feature = "python", pyclass)]
+#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 pub enum TranscriptionResponse {
@@ -291,7 +291,7 @@ struct TranscriptionForm {
     response_format: Option<ResponseFormat>,
 }
 
-#[cfg_attr(feature = "python", pyclass)]
+#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone)]
 pub struct TranscriptionRequest {
@@ -427,16 +427,57 @@ impl Into<OpenApiRouter> for TranscriptionRouter {
 }
 
 #[cfg(feature = "python")]
-mod python {
-    use crate::audio::transcription::{Segment, Transcription, TranscriptionRequest, TranscriptionResponse, VerboseTranscription};
+pub(crate) mod python {
+    use crate::audio::transcription::{ResponseFormat, Segment, Transcription, TranscriptionRequest, TranscriptionResponse, VerboseTranscription};
     use hfendpoints_binding_python::fill_view_from_readonly_data;
     use pyo3::ffi::Py_buffer;
     use pyo3::prelude::*;
     use std::ffi::CString;
     use tracing::{debug, instrument};
 
+    #[pyclass(frozen, eq, eq_int)]
+    #[derive(Eq, PartialEq)]
+    pub enum TranscriptionResponseKind {
+        #[pyo3(name = "TEXT")]
+        Text = 1,
+
+        #[pyo3(name = "JSON")]
+        Json = 2,
+
+        #[pyo3(name = "VERBOSE_JSON")]
+        VerboseJson = 3,
+    }
+
+
     #[pymethods]
-    impl Segment {}
+    impl Segment {
+        #[new]
+        pub fn new(
+            id: u16,
+            start: f32,
+            end: f32,
+            seek: u16,
+            temperature: f32,
+            text: String,
+            tokens: Vec<u32>,
+            avg_logprob: f32,
+            compression_ratio: f32,
+            no_speech_prob: f32,
+        ) -> PyResult<Self> {
+            Ok(Self {
+                id,
+                start,
+                end,
+                seek,
+                temperature,
+                text,
+                tokens,
+                avg_logprob,
+                compression_ratio,
+                no_speech_prob,
+            })
+        }
+    }
 
     #[pymethods]
     impl Transcription {
@@ -474,6 +515,30 @@ mod python {
             debug!("Releasing Python memoryview");
             // Release memory held by the format string
             drop(unsafe { CString::from_raw((*buffer).format) });
+        }
+
+        #[getter]
+        pub fn language(&self) -> &str {
+            &self.language
+        }
+
+        #[getter]
+        pub fn prompt(&self) -> &Option<String> {
+            &self.prompt
+        }
+
+        #[getter]
+        pub fn temperature(&self) -> f32 {
+            self.temperature
+        }
+
+        #[getter]
+        pub fn response_kind(&self) -> PyResult<TranscriptionResponseKind> {
+            match self.response_format {
+                ResponseFormat::Json => Ok(TranscriptionResponseKind::Json),
+                ResponseFormat::Text => Ok(TranscriptionResponseKind::Text),
+                ResponseFormat::VerboseJson => Ok(TranscriptionResponseKind::VerboseJson)
+            }
         }
     }
 
