@@ -17,6 +17,8 @@ use utoipa_scalar::{Scalar, Servable};
 pub(crate) mod audio;
 mod error;
 mod headers;
+mod context;
+pub use context::Context;
 
 type OpenAiResult<T> = Result<T, OpenAiError>;
 
@@ -112,20 +114,20 @@ pub mod python {
             }
 
             impl Handler for PyHandler {
-                type Request = $request;
+                type Request = ($request, Context);
                 type Response = $response;
 
                 #[instrument(skip_all)]
                 async fn on_request(&self, request: Self::Request) -> Result<Self::Response, Error> {
-                    debug!("[FFI] Calling Python Handler");
-
                     // Retrieve the current event loop
                     let locals = Python::with_gil(|py| TASK_LOCALS.get().unwrap().clone_ref(py));
+
+                    let (request, ctx) = request;
 
                     // Create the coroutine on Python side to await through tokio
                     let coro = Python::with_gil(|py| {
                         let py_coro_call = self.inner
-                            .call(py, (request, PyNone::get(py)), None)?
+                            .call(py, (request, ctx), None)?
                             .into_bound(py);
 
                         debug!("[NATIVE] asyncio Handler's coroutine (__call__) created");
@@ -151,7 +153,7 @@ pub mod python {
 
     macro_rules! impl_pyendpoint {
         ($name: literal, $pyname: ident, $handler: ident, $router: ident) => {
-            use crate::{ApiDoc, health, __path_health, serve_openai};
+            use crate::{ApiDoc, Context, health, __path_health, serve_openai};
             use hfendpoints_core::{Endpoint, wait_for_requests};
             use std::sync::Arc;
             use pyo3::exceptions::PyRuntimeError;
@@ -211,7 +213,7 @@ pub mod python {
 
     pub(crate) use impl_pyendpoint;
     pub(crate) use impl_pyhandler;
-
+    use crate::context::Context;
 
     #[instrument(skip(endpoint))]
     async fn serve(endpoint: Arc<PyObject>, interface: String, port: u16) -> PyResult<()> {
@@ -239,11 +241,6 @@ pub mod python {
 
         let endpoint = Arc::new(endpoint);
         Python::with_gil(|py| {
-            // Initialize asyncio
-            // let asyncio = py.import("asyncio")?;
-            // let event_loop = asyncio.call_method0("new_event_loop")?;
-            // asyncio.call_method1("set_event_loop", (event_loop,))?;
-
             py.allow_threads(|| {
                 let endpoint = Arc::clone(&endpoint);
                 pyo3_async_runtimes::tokio::get_runtime().block_on(async {
@@ -262,6 +259,7 @@ pub mod python {
     pub fn bind<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
         let module = ImportablePyModuleBuilder::new(py, name)?
             .defaults()?
+            .add_class::<Context>()?
             .add_submodule(&crate::audio::python::bind(py, &format!("{name}.audio"))?)?
             .finish();
 

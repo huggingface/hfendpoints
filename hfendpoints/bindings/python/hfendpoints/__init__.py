@@ -1,7 +1,5 @@
 from typing import Protocol, TypeVar, runtime_checkable
 
-from hfendpoints._hfendpoints.openai import run
-
 Request = TypeVar("Request", infer_variance=True)
 Response = TypeVar("Response", infer_variance=True)
 

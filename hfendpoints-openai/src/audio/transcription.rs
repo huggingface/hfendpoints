@@ -9,11 +9,11 @@ use hfendpoints_core::{EndpointContext, Error};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::log::info;
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
+use crate::context::Context;
 use crate::headers::RequestId;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
@@ -378,7 +378,6 @@ impl TranscriptionRequest {
     }
 }
 
-#[instrument(skip(ctx, multipart))]
 #[utoipa::path(
     post,
     path = "/audio/transcriptions",
@@ -388,19 +387,20 @@ impl TranscriptionRequest {
         (status = OK, description = "Transcribes audio into the input language.", body = TranscriptionResponse),
     )
 )]
+#[instrument(skip(state, multipart))]
 pub async fn transcribe(
-    State(ctx): State<EndpointContext<TranscriptionRequest, TranscriptionResponse>>,
+    State(state): State<EndpointContext<(TranscriptionRequest, Context), TranscriptionResponse>>,
     request_id: TypedHeader<RequestId>,
     multipart: Multipart,
 ) -> OpenAiResult<TranscriptionResponse> {
+    // Decode request
     let request = TranscriptionRequest::try_from_multipart(multipart).await?;
-    info!(
-        "Received audio file {} ({} kB)",
-        &request.content_type,
-        request.file.len() / 1024
-    );
 
-    let mut egress = ctx.schedule(request);
+    // Create request context
+    let ctx = Context::new(request_id.0);
+
+    // Ask for the inference thread to handle it and wait for answers
+    let mut egress = state.schedule((request, ctx));
     if let Some(response) = egress.recv().await {
         Ok(response?)
     } else {
@@ -413,7 +413,7 @@ pub async fn transcribe(
 #[derive(Clone)]
 pub struct TranscriptionRouter(
     pub UnboundedSender<(
-        TranscriptionRequest,
+        (TranscriptionRequest, Context),
         UnboundedSender<Result<TranscriptionResponse, Error>>,
     )>,
 );
@@ -421,7 +421,7 @@ impl Into<OpenApiRouter> for TranscriptionRouter {
     fn into(self) -> OpenApiRouter {
         OpenApiRouter::new()
             .routes(routes!(transcribe))
-            .with_state(EndpointContext::<TranscriptionRequest, TranscriptionResponse>::new(self.0))
+            .with_state(EndpointContext::<(TranscriptionRequest, Context), TranscriptionResponse>::new(self.0))
             .layer(DefaultBodyLimit::max(200 * 1024 * 1024)) // 200Mb as OpenAI
     }
 }

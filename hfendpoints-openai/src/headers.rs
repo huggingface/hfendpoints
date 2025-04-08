@@ -8,7 +8,7 @@ static X_REQUEST_ID_NAME: HeaderName = HeaderName::from_static("x-request-id");
 
 /// Holds the value of the x-request-id header used to
 /// correlate request and execution within the server.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RequestId(Cow<'static, str>);
 
 impl Deref for RequestId {
