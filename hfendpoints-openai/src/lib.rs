@@ -118,7 +118,7 @@ pub mod python {
                 type Response = $response;
 
                 #[instrument(skip_all)]
-                async fn on_request(&self, request: Self::Request) -> Result<Self::Response, Error> {
+                async fn on_request(&self, request: Self::Request) -> Receiver<Infer>{
                     // Retrieve the current event loop
                     let locals = Python::with_gil(|py| TASK_LOCALS.get().unwrap().clone_ref(py));
 

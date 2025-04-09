@@ -1,7 +1,23 @@
 use crate::Error;
+use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, error, span, warn, Instrument, Level};
+
+///
+#[cfg_attr(debug_assertions, derive(Debug))]
+pub enum InferResponse<F, D>
+where
+    D: Debug,
+    F: Debug,
+{
+    Delta(D),
+    Final(F),
+}
+
+pub type NoDelta = ();
+pub type InferResponseNoDelta<F> = InferResponse<F, NoDelta>;
+
 
 ///
 pub trait Handler {
@@ -21,7 +37,7 @@ pub trait Handler {
     /// ```
     ///
     /// ```
-    fn on_request(&self, request: Self::Request) -> impl Future<Output=Result<Self::Response, Error>> + Send;
+    fn on_request(&self, request: Self::Request);
 }
 
 pub async fn wait_for_requests<I, O, H>(
@@ -35,7 +51,6 @@ where
 {
     'looper: loop {
         if let Some((request, egress)) = ingress.recv().await {
-            debug!("[LOOPER] Received request");
             let background_handler = Arc::clone(&background_handler);
             let sp_on_request = span!(Level::DEBUG, "on_request");
             async move {
