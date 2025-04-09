@@ -2,6 +2,7 @@ use axum::http::{HeaderName, HeaderValue};
 use headers::{Error, Header};
 use std::borrow::Cow;
 use std::ops::Deref;
+use tracing::error;
 
 static X_REQUEST_ID_NAME: HeaderName = HeaderName::from_static("x-request-id");
 
@@ -37,6 +38,7 @@ impl Header for RequestId {
             .ok_or_else(headers::Error::invalid)?;
 
         Ok(RequestId(Cow::from(value.to_str().map_err(|err| {
+            error!("Failed to decode x-request-id header: {err}");
             Error::invalid()
         })?.to_string())))
     }
