@@ -137,15 +137,17 @@ pub mod python {
                         error!("Failed to retrieve __call__ coroutine: {err}");
                     })?;
 
-                    // Schedule the coroutine
-                    let response = pyo3_async_runtimes::tokio::scope(locals, coro).await.inspect_err(|err| {
-                       error!("Failed to execute __call__: {err}");
-                    })?;
+                    pyo3_async_runtimes::tokio::get_runtime().spawn(async {
+                        // Schedule the coroutine
+                        let response = pyo3_async_runtimes::tokio::scope(locals, coro).await.inspect_err(|err| {
+                           error!("Failed to execute __call__: {err}");
+                        })?;
 
-                    debug!("[NATIVE] asyncio Handler's coroutine (__call__) done");
+                        debug!("[NATIVE] asyncio Handler's coroutine (__call__) done");
 
-                    // We are downcasting from Python object to Rust typed type
-                    Ok(Python::with_gil(|py| response.extract::<Self::Response>(py))?)
+                        // We are downcasting from Python object to Rust typed type
+                        Ok(Python::with_gil(|py| response.extract::<Self::Response>(py))?)
+                    }).await;
                 }
             }
         };
