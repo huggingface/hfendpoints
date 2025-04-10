@@ -4,12 +4,12 @@ from io import BytesIO
 from typing import Sequence, Any, Dict, List, Tuple, Generator, Optional
 
 import numpy as np
-from librosa import load as load_audio, get_duration
-from loguru import logger
 from hfendpoints.openai import Context, run
 from hfendpoints.openai.audio import AutomaticSpeechRecognitionEndpoint, \
     TranscriptionRequest, TranscriptionResponse, TranscriptionResponseKind, SegmentBuilder, Segment, \
     Transcription, VerboseTranscription
+from librosa import load as load_audio, get_duration
+from loguru import logger
 from transformers import PreTrainedTokenizer
 from vllm import AsyncEngineArgs, AsyncLLMEngine, CompletionOutput, RequestOutput, SamplingParams
 
