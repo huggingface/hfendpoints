@@ -25,7 +25,7 @@ pub trait Handler {
     fn on_request(
         &self,
         request: Self::Request,
-    ) -> impl Future<Output = Result<Self::Response, Error>> + Send;
+    ) -> impl Future<Output=Result<Self::Response, Error>> + Send;
 }
 
 pub async fn wait_for_requests<I, O, H>(
@@ -34,7 +34,7 @@ pub async fn wait_for_requests<I, O, H>(
 ) where
     I: Send + 'static,
     O: Send + 'static,
-    H: Handler<Request = I, Response = O> + Send + Sync + 'static,
+    H: Handler<Request=I, Response=O> + Send + Sync + 'static,
 {
     'looper: loop {
         if let Some((request, egress)) = ingress.recv().await {
@@ -42,19 +42,14 @@ pub async fn wait_for_requests<I, O, H>(
             let background_handler = Arc::clone(&background_handler);
             let sp_on_request = span!(Level::DEBUG, "on_request");
 
-            if let Err(err) = spawn(
+            spawn(
                 async move {
                     let response = background_handler.on_request(request).await;
                     if let Err(e) = egress.send(response) {
                         error!("Failed to send back response to client: {e}");
                     }
-                }
-                .instrument(sp_on_request),
-            )
-            .await
-            {
-                warn!("Failed to join task : {err}");
-            }
+                }.instrument(sp_on_request),
+            );
         } else {
             warn!("[LOOPER] received a termination notice from ingress channel, exiting");
             break 'looper;
