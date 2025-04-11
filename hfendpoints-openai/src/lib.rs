@@ -128,7 +128,7 @@ pub mod python {
 
                     // Create the coroutine on Python side to await through tokio
                     let coro = Python::with_gil(|py| {
-                        let py_coro_call = self.inner.into_bound(py).call1(py, (request, ctx))?;
+                        let py_coro_call = self.inner.call1(py, (request, ctx))?.into_bound(py);
 
                         debug!("[NATIVE] asyncio Handler's coroutine (__call__) created");
                         pyo3_async_runtimes::into_future_with_locals(&locals, py_coro_call)

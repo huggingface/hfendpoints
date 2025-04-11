@@ -12,8 +12,7 @@ pub use metrics::InFlightStats;
 use pyo3::PyErr;
 use thiserror::Error;
 
-#[cfg_attr(debug_assertions, derive(Debug))]
-#[derive(Error)]
+#[derive(Debug, Error)]
 pub enum Error {
     #[cfg(feature = "python")]
     #[error("Caught error while executing Python code: {0}")]
