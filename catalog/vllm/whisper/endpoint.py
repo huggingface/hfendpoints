@@ -1,9 +1,11 @@
 import asyncio
 import zlib
+from functools import lru_cache
 from io import BytesIO
 from typing import Sequence, Any, Dict, List, Tuple, Generator, Optional
 
 import numpy as np
+import torch
 from hfendpoints.openai import Context, run
 from hfendpoints.openai.audio import AutomaticSpeechRecognitionEndpoint, \
     TranscriptionRequest, TranscriptionResponse, TranscriptionResponseKind, SegmentBuilder, Segment, \
@@ -12,6 +14,7 @@ from librosa import load as load_audio, get_duration
 from loguru import logger
 from transformers import PreTrainedTokenizer
 from vllm import AsyncEngineArgs, AsyncLLMEngine, CompletionOutput, RequestOutput, SamplingParams
+from vllm.sequence import SampleLogprobs
 
 from hfendpoints import Handler
 
@@ -58,15 +61,20 @@ def create_prompt(audio: np.ndarray, sampling_rate: int, timestamp_marker: int, 
     }
 
 
+def get_avg_logprob(logprobs: SampleLogprobs) -> float:
+    return sum(next(iter(_step_.values())).logprob for _step_ in logprobs) / float(len(logprobs))
+
+
 def process_chunk(
         tokenizer: PreTrainedTokenizer,
         ids: np.ndarray,
+        logprobs: torch.Tensor,
         request: TranscriptionRequest,
         segment_offset: int,
         timestamp_offset: int
 ) -> Generator:
     # Some constants
-    k_timestamp_token = tokenizer.convert_tokens_to_ids("<|0.00|>")
+    k_timestamp_token = lru_cache(tokenizer.convert_tokens_to_ids("<|0.00|>"))
 
     # Detect start of transcript token
     # sot_mask = ids == k_sot_token
@@ -93,10 +101,12 @@ def process_chunk(
                 segment_ids = ids[slice_start: position]
                 segment_text = tokenizer.decode(segment_ids)
 
-                # Compute the avg_logprob and no_speech_probs for the segment
-                # segment_logprobs = generation.logprobs[slice_start: position]
-                # segment_probs_at_sot = np.exp([logprobs[nospeech_token_base] for logprobs in segment_logprobs])
-                # segment_logprobs = [segment_logprobs[token] for token in segment_ids]
+                # Compute the avg_logprob
+                avg_logprob = get_avg_logprob(logprobs)
+
+                # no-speech logprob
+                # no_speech_token_id = lru_cache(tokenizer.convert_tokens_to_ids("<|nospeech|>"))
+                # no_speech_logprob = logprobs[no_speech_token_id]
 
                 # Materialize the segment in memory
                 segment = SegmentBuilder() \
@@ -106,6 +116,7 @@ def process_chunk(
                     .text(segment_text) \
                     .tokens(segment_ids.tolist()) \
                     .temperature(request.temperature) \
+                    .avg_logprob(avg_logprob) \
                     .compression_ratio(compression_ratio(segment_text)) \
                     .build()
 
@@ -130,8 +141,10 @@ def process_chunks(tokenizer: PreTrainedTokenizer, chunks: List[RequestOutput], 
 
         generation: CompletionOutput = chunk.outputs[-1]
         ids: np.ndarray = np.asarray(generation.token_ids)
+        logprobs = generation.logprobs
 
-        for (segment, _is_continuation) in process_chunk(tokenizer, ids, request, segment_offset, time_offset):
+        for (segment, _is_continuation) in process_chunk(tokenizer, ids, logprobs, request, segment_offset,
+                                                         time_offset):
             materialized_segments.append(segment)
 
         # Accumulate the tokens for full decoding
@@ -161,15 +174,20 @@ class WhisperHandler(Handler[TranscriptionRequest, TranscriptionResponse]):
             device="auto",
             dtype="bfloat16",
             kv_cache_dtype="fp8",
-            enforce_eager=True,
+            enforce_eager=False,
             enable_prefix_caching=True,
+            max_logprobs=100  # TODO(mfuntowicz) : Set from config?
         ))
 
     async def __call__(self, request: TranscriptionRequest, ctx: Context) -> TranscriptionResponse:
         with logger.contextualize(request_id=ctx.request_id):
             with memoryview(request) as audio:
+
+                # Check if we need to enable the verbose path
+                is_verbose = request.response_kind == TranscriptionResponseKind.VERBOSE_JSON
+
                 # Decode audio from librosa (for now)
-                # TODO: Use Rust symphonia
+                # TODO: Use native (Rust provided) decoding
                 (waveform, sampling) = load_audio(BytesIO(audio), sr=22050, mono=True)
                 logger.debug(f"Successfully decoded {len(waveform)} bytes PCM audio chunk")
 
@@ -196,11 +214,11 @@ class WhisperHandler(Handler[TranscriptionRequest, TranscriptionResponse]):
                         "prompt": prompt,
                         "sampling_params": SamplingParams.from_optional(
                             # output_kind=RequestOutputKind.FINAL_ONLY,  # Change if streaming
-                            max_tokens=model_config.max_model_len - 4,
+                            max_tokens=lru_cache(model_config.max_model_len) - 4,
                             skip_special_tokens=False,
                             detokenize=False,
                             temperature=request.temperature,
-                            logprobs=request.response_kind == TranscriptionResponseKind.VERBOSE_JSON,
+                            logprobs=100,
                         ),
                         "request_id": f"{ctx.request_id}-{audio_chunk_id}"
                     }
