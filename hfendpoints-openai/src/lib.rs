@@ -62,7 +62,7 @@ where
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
-                .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid::default()))
+                .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
                 .layer(PropagateRequestIdLayer::new(x_request_id_header_name)),
         )
         .routes(routes!(health))

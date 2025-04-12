@@ -17,7 +17,7 @@ impl Deref for RequestId {
 
     fn deref(&self) -> &Self::Target {
         match &self.0 {
-            Cow::Borrowed(value) => *value,
+            Cow::Borrowed(value) => value,
             Cow::Owned(value) => value.as_str()
         }
     }
