@@ -417,11 +417,12 @@ pub struct TranscriptionRouter(
         UnboundedSender<Result<TranscriptionResponse, Error>>,
     )>,
 );
-impl Into<OpenApiRouter> for TranscriptionRouter {
-    fn into(self) -> OpenApiRouter {
+
+impl From<TranscriptionRouter> for OpenApiRouter {
+    fn from(value: TranscriptionRouter) -> Self {
         OpenApiRouter::new()
             .routes(routes!(transcribe))
-            .with_state(EndpointContext::<(TranscriptionRequest, Context), TranscriptionResponse>::new(self.0))
+            .with_state(EndpointContext::<(TranscriptionRequest, Context), TranscriptionResponse>::new(value.0))
             .layer(DefaultBodyLimit::max(200 * 1024 * 1024)) // 200Mb as OpenAI
     }
 }
