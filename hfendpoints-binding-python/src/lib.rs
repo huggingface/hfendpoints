@@ -64,7 +64,7 @@ impl<'py> ImportablePyModuleBuilder<'py> {
     pub fn add_submodule(self, module: &Bound<'_, PyModule>) -> PyResult<Self> {
         // We only need to add the module name to the current attribute dictionary.
         let fully_qualified_name = module.name()?.extract::<String>()?;
-        let name = fully_qualified_name.split('.').last().ok_or_else(|| {
+        let name = fully_qualified_name.split('.').next_back().ok_or_else(|| {
             let msg = format!(
                 "Can't extract module name from fully qualified name {fully_qualified_name}"
             );
