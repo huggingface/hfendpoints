@@ -16,6 +16,8 @@ pub(crate) mod audio;
 mod context;
 mod error;
 mod headers;
+mod embeddings;
+
 pub use context::Context;
 
 type OpenAiResult<T> = Result<T, OpenAiError>;
