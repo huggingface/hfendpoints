@@ -32,11 +32,13 @@ class EndpointConfig:
         return EndpointConfig(
             interface=os.environ.get("INTERFACE", "0.0.0.0"),
             port=int(os.environ.get("PORT", 8000)),
-            model_id=os.environ.get("MODEL_ID", "/repository")
+            model_id=os.environ.get("MODEL_ID", "/repository"),
         )
 
 
-def ensure_supported_architectures(config: "PretrainedConfig", supported_archs: Iterable[str]):
+def ensure_supported_architectures(
+    config: "PretrainedConfig", supported_archs: Iterable[str]
+):
     """
     Check whether the specified architectures for the provided `config` are supported according to the `supported_archs`
     :param config: `transformers.PretrainedConfig` object containing information about the underlying model architectures
@@ -45,6 +47,5 @@ def ensure_supported_architectures(config: "PretrainedConfig", supported_archs: 
     """
     if config.architectures and not set(config.architectures).union(supported_archs):
         raise UnsupportedModelArchitecture(
-            archs=config.architectures,
-            supported_archs=list(supported_archs)
+            archs=config.architectures, supported_archs=list(supported_archs)
         )

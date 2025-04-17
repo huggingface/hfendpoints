@@ -1,7 +1,14 @@
 from typing import List
 
-from ..._hfendpoints.openai.audio import AutomaticSpeechRecognitionEndpoint, Segment, Transcription, \
-    VerboseTranscription, TranscriptionRequest, TranscriptionResponse, TranscriptionResponseKind
+from ..._hfendpoints.openai.audio import (
+    AutomaticSpeechRecognitionEndpoint,
+    Segment,
+    Transcription,
+    VerboseTranscription,
+    TranscriptionRequest,
+    TranscriptionResponse,
+    TranscriptionResponseKind,
+)
 
 
 class SegmentBuilder:
@@ -17,7 +24,9 @@ class SegmentBuilder:
         self._compression_ratio = 0.0
         self._no_speech_prob = 0.0
 
-    def build(self, ) -> Segment:
+    def build(
+        self,
+    ) -> Segment:
         if self._id is None:
             raise ValueError("Segment's id cannot be None")
 
@@ -37,7 +46,7 @@ class SegmentBuilder:
             tokens=self._tokens,
             avg_logprob=self._avg_lobprob,
             compression_ratio=self._compression_ratio,
-            no_speech_prob=self._no_speech_prob
+            no_speech_prob=self._no_speech_prob,
         )
 
     def id(self, id: int) -> "SegmentBuilder":
