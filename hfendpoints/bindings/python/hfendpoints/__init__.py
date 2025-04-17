@@ -1,5 +1,7 @@
 from typing import Protocol, TypeVar, runtime_checkable
 
+from .config import EndpointConfig, ensure_supported_architectures
+
 Request = TypeVar("Request", infer_variance=True)
 Response = TypeVar("Response", infer_variance=True)
 
