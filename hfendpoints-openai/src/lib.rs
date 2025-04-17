@@ -1,7 +1,4 @@
-use crate::{
-    audio::{AUDIO_DESC, AUDIO_TAG},
-    embeddings::{EMBEDDINGS_DESC, EMBEDDINGS_TAG},
-};
+use crate::audio::{AUDIO_DESC, AUDIO_TAG};
 use axum::http::{HeaderName, StatusCode};
 use error::OpenAiError;
 use std::fmt::Debug;
