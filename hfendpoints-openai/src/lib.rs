@@ -1,13 +1,11 @@
 use crate::audio::{AUDIO_DESC, AUDIO_TAG};
-use axum::http::HeaderName;
-use axum::Json;
+use axum::http::{HeaderName, StatusCode};
 use error::OpenAiError;
 use std::fmt::Debug;
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tower::ServiceBuilder;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::trace::TraceLayer;
-
 use tracing::instrument;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
@@ -33,8 +31,9 @@ const STATUS_DESC: &str = "Healthiness and monitoring of the endpoint";
         (status = OK, description = "Success", body = str, content_type = "application/json")
     )
 )]
-async fn health() -> Json<&'static str> {
-    Json::from("OK")
+#[instrument]
+async fn health() -> StatusCode {
+    StatusCode::OK
 }
 
 #[derive(OpenApi)]
@@ -85,7 +84,6 @@ pub mod python {
     use pyo3::prepare_freethreaded_python;
     use pyo3_async_runtimes::tokio::init;
     use pyo3_async_runtimes::TaskLocals;
-    use std::sync::Arc;
     use tokio::sync::OnceCell;
     use tracing::instrument;
 
@@ -190,11 +188,8 @@ pub mod python {
                     let _ = pyo3_async_runtimes::tokio::get_runtime()
                         .spawn(wait_for_requests(receiver, handler));
 
-                    info!(
-                        "Starting OpenAi compatible endpoint at {}:{}",
-                        &inet_address.0, &inet_address.1
-                    );
-                    serve_openai(inet_address, router)
+                    info!("Starting endpoint at {}:{}", &inet_address.0, &inet_address.1);
+                    pyo3_async_runtimes::tokio::get_runtime().spawn(serve_openai(inet_address, router))
                         .await
                         .inspect_err(|err| {
                             info!("Caught error while serving endpoint: {err}");
@@ -232,8 +227,7 @@ pub mod python {
     pub(crate) use impl_pyendpoint;
     pub(crate) use impl_pyhandler;
 
-    #[instrument(skip(endpoint))]
-    async fn serve(endpoint: Arc<PyObject>, interface: String, port: u16) -> PyResult<()> {
+    async fn serve(endpoint: PyObject, interface: String, port: u16) -> PyResult<()> {
         let locals = TASK_LOCALS
             .get_or_try_init(|| async {
                 Python::with_gil(|py| pyo3_async_runtimes::tokio::get_current_locals(py))
@@ -241,12 +235,9 @@ pub mod python {
             .await?;
 
         Python::with_gil(|py| {
-            let coro = endpoint
-                .bind(py)
-                .call_method1("_serve_", (interface, port))?;
+            let coro = endpoint.bind(py).call_method1("_serve_", (interface, port))?;
             pyo3_async_runtimes::into_future_with_locals(&locals, coro)
-        })?
-            .await?;
+        })?.await?;
         Ok(())
     }
 
@@ -259,10 +250,8 @@ pub mod python {
         // Initialize the tokio runtime and bind this runtime to the tokio <> asyncio compatible layer
         init(create_multithreaded_runtime());
 
-        let endpoint = Arc::new(endpoint);
         Python::with_gil(|py| {
             py.allow_threads(|| {
-                let endpoint = Arc::clone(&endpoint);
                 pyo3_async_runtimes::tokio::get_runtime().block_on(async {
                     Python::with_gil(|inner| {
                         pyo3_async_runtimes::tokio::run(inner, serve(endpoint, interface, port))
