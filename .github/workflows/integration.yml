@@ -8,14 +8,16 @@ jobs:
   build_target_matrix:
     runs-on: ubuntu-latest
     env:
-      HFENDPOINTS_MODEL_REPOSITORIES: "hfendpoints-images/whisper-vllm-gpu;"
+      HFENDPOINTS_MODEL_REPOSITORIES: "whisper-vllm-gpu;embeddings-llamacpp-cpu"
 
     steps:
       - name: "Extract image repositories"
         run: |
           IFS=';' read -r -a repositories <<< "${HFENDPOINTS_MODEL_REPOSITORIES}"
           echo "Fetching deployment information for: $repositories"
-          for index in "${!repositories[@]}"; do echo "HFENDPOINTS_MODEL_REPOSITORIES_${index}=${repositories[$index]}" >> "$GITHUB_ENV"; done
+          for index in "${!repositories[@]}"; do
+            echo "HFENDPOINTS_MODEL_REPOSITORIES_${index}=hfendpoints-images/${repositories[$index]}" >> "$GITHUB_ENV";
+          done
           echo "HFENDPOINTS_MODEL_REPOSITORIES_COUNT=${#repositories[@]}" >> "$GITHUB_ENV"
 
       - name: "Build matrix"
