@@ -6,6 +6,9 @@ on:
 
 jobs:
   build_target_matrix:
+    outputs:
+      repository: string
+
     runs-on: ubuntu-latest
     env:
       HFENDPOINTS_MODEL_REPOSITORIES: "whisper-vllm-gpu;embeddings-llamacpp-cpu"
@@ -17,6 +20,7 @@ jobs:
           IFS=';' read -r -a repositories <<< "${HFENDPOINTS_MODEL_REPOSITORIES}"
           REPOSITORIES_JSON_ARRAY=(jq -c -n '$ARGS.positional' --args "${repositories[@]}")
           REPOSITORIES_JSON_OBJECT=(jq -n --argjson repositories $REPOSITORIES_JSON_ARRAY -f <(echo '{"repository":$repositories}'))
+          echo "Executing integration tests on the following repositories: ${REPOSITORIES_JSON_OBJECT}" >> $GITHUB_STEP_SUMMARY
           echo "repositories=${REPOSITORIES_JSON_OBJECT}" >> "$GITHUB_OUTPUT"
 
   deploy_endpoints:
