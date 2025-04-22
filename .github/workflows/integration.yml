@@ -15,8 +15,8 @@ jobs:
         run: |
           IFS=';' read -r -a repositories <<< "${HFENDPOINTS_MODEL_REPOSITORIES}"
           echo "Fetching deployment information for: $repositories"
-          for index in "${!repositories[@]}"; do echo "HFENDPOINTS_MODEL_REPOSITORIES_${index}=${repositories[$index]}" >> GITHUB_ENV; done
-          echo "HFENDPOINTS_MODEL_REPOSITORIES_COUNT=${#repositories[@]}" >> $GITHUB_ENV
+          for index in "${!repositories[@]}"; do echo "HFENDPOINTS_MODEL_REPOSITORIES_${index}=${repositories[$index]}" >> "$GITHUB_ENV"; done
+          echo "HFENDPOINTS_MODEL_REPOSITORIES_COUNT=${#repositories[@]}" >> "$GITHUB_ENV"
 
       - name: "Build matrix"
         run: |
