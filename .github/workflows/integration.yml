@@ -37,19 +37,24 @@ jobs:
       max-parallel: 10
     steps:
       - name: "Install hfjobs"
-        run: python3 -m pip install hfjobs
+        run: python3 -m pip install hfjobs huggingface_hub
 
-      - uses: actions/checkout@v4
-        with:
-          repository: huggingface/hf-cli
-          fetch-depth: '1'
-          ref: 'main'
-          token: ${{ secrets.HUGGINGFACE_CLI_TOKEN }}
-
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: "Build & install Hugging Face CLI"
-        run: cargo build --release hf-cli
+      #      TODO: Check with Hugo
+      #      - uses: actions/checkout@v4
+      #        with:
+      #          repository: huggingface/hf-cli
+      #          fetch-depth: '1'
+      #          ref: 'main'
+      #          token: ${{ secrets.HUGGINGFACE_CLI_TOKEN }}
+      #
+      #      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      #      - name: "Build & install Hugging Face CLI"
+      #        run: cargo build --release hf-cli
 
       - name: "Fetch endpoint specs"
-        run: echo ${{ matrix.repository }}
+        run: |
+          echo "Fetching repository .hfjobs content for ${{ matrix.repository }}"
+          huggingface_cli download ${{ matrix.repository }}/ --cache-dir /tmp/${{ matrix.repository }}
+
+
 
