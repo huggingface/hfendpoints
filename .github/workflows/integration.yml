@@ -22,5 +22,5 @@ jobs:
         run: |
           for index in $(seq 0 $HFENDPOINTS_MODEL_REPOSITORIES_COUNT); do
             REPOSITORY=HFENDPOINTS_MODEL_REPOSITORIES_$index
-            echo "Repository #${index}: ${!REPOSITORY}"
+            echo "Repository #${index} -> ${!REPOSITORY}"
           done
