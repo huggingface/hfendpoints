@@ -42,6 +42,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: huggingface/hf-cli
+          path: ..
           fetch-depth: '1'
           token: ${{ secrets.HUGGINGFACE_CLI_TOKEN }}
 
