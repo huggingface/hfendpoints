@@ -17,3 +17,10 @@ jobs:
           echo "Fetching deployment information for: $repositories"
           for index in "${!repositories[@]}"; do echo "HFENDPOINTS_MODEL_REPOSITORIES_${index}=${repositories[$index]}" >> GITHUB_ENV; done
           echo "HFENDPOINTS_MODEL_REPOSITORIES_COUNT=${#repositories[@]}" >> $GITHUB_ENV
+
+      - name: "Build matrix"
+        run: |
+          for index in ${HFENDPOINTS_MODEL_REPOSITORIES_COUNT}; do
+            REPOSITORY=HFENDPOINTS_MODEL_REPOSITORIES_$index;
+            echo "Repository #${index}: ${!REPOSITORY}";
+          done
