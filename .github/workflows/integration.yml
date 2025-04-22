@@ -15,8 +15,9 @@ jobs:
       - name: "Extract image repositories"
         run: |
           IFS=';' read -r -a repositories <<< "${HFENDPOINTS_MODEL_REPOSITORIES}"
-          REPOSITORY_JSON=`jq -c -n '$ARGS.positional' --args "${repositories[@]}"`
-          echo "repository=`jq -n --argjson repository $REPOSITORY_JSON -f <(echo \'{\"repository\":[$repository]}\')`" >> "$GITHUB_OUTPUT"
+          REPOSITORY_JSON_ARRAY=`jq -c -n '$ARGS.positional' --args "${repositories[@]}"`
+          REPOSITORY_JSON_OBJECT=`jq -n --argjson repository $REPOSITORY_JSON_ARRAY -f <(echo '{"repository":[$repository]}')`
+          echo "repository=${REPOSITORY_JSON_OBJECT}" >> "$GITHUB_OUTPUT"
 
   deploy_endpoints:
     runs-on: ubuntu-latest
