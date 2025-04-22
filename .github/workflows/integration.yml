@@ -18,7 +18,7 @@ jobs:
       - name: "Extract image repositories"
         run: |
           IFS=';' read -r -a repositories <<< "${HFENDPOINTS_MODEL_REPOSITORIES}"
-          REPOSITORIES_JSON_ARRAY=(jq -c -n '$ARGS.positional' --args "${repositories[@]}")
+          REPOSITORIES_JSON_ARRAY=`(jq -c -n '$ARGS.positional' --args "${repositories[@]}")`
           echo "Executing integration tests on the following repositories: ${REPOSITORIES_JSON_ARRAY}" >> $GITHUB_STEP_SUMMARY
   #          REPOSITORIES_JSON_OBJECT=(jq -n --argjson __repositories__ $REPOSITORIES_JSON_ARRAY -f <(echo '{"repository":$__repositories__}'))
   #          echo "REPOSITORIES=${REPOSITORIES_JSON_OBJECT}" >> "$GITHUB_OUTPUT"
