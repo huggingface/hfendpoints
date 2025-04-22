@@ -20,7 +20,7 @@ jobs:
 
       - name: "Build matrix"
         run: |
-          for index in $(seq $HFENDPOINTS_MODEL_REPOSITORIES_COUNT); do
+          for index in $(seq 1 $HFENDPOINTS_MODEL_REPOSITORIES_COUNT); do
             REPOSITORY=HFENDPOINTS_MODEL_REPOSITORIES_$index
             echo "Repository #${index}: ${!REPOSITORY}"
           done
