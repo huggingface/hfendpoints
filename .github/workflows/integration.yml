@@ -54,7 +54,7 @@ jobs:
       - name: "Fetch endpoint specs"
         run: |
           echo "Fetching repository .hfjobs content for ${{ matrix.repository }}"
-          huggingface_cli download ${{ matrix.repository }}/ --cache-dir /tmp/${{ matrix.repository }}
+          huggingface_cli download hfendpoints-images/${{ matrix.repository }}/ --cache-dir /tmp/${{ matrix.repository }}
 
 
 
