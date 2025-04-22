@@ -55,7 +55,18 @@ jobs:
         run: |
           echo "Fetching repository .hfjobs content for ${{ matrix.repository }}"
           huggingface-cli login ${{ secrets.HUB_HFENDPOINTS_IMAGES_ORG_TOKEN }}
-          huggingface-cli download hfendpoints-images/${{ matrix.repository }} --cache-dir /tmp/${{ matrix.repository }}
+          huggingface-cli download hfendpoints-images/${{ matrix.repository }} --cache-dir ./repos/${{ matrix.repository }}
+
+      - name: "Run test with hfjobs"
+        env:
+          MODEL_PATH: repos/${{ matrix.repository }}
+          MODEL_HFJOBS_FOLDER_PATH: ${MODEL_PATH}/.hfjobs
+        if: ${{ hashFiles(MODEL_HFJOBS_FOLDER_PATH) != '' }}
+        run: |
+          echo "Running $(cat ${{ MODEL_HFJOBS_FOLDER_PATH }}/deploy.json | jq '.id' )"
+          echo "\t -> $(cat ${{ MODEL_HFJOBS_FOLDER_PATH }}/deploy.json | jq '.description' )"
+          HARDWARE=$(cat ${{ MODEL_HFJOBS_FOLDER_PATH }}/deploy.json | jq '.hardware' )"
+          hfjobs run --timeout 1m --flavor $HARDWARE {{ MODEL_HFJOBS_FOLDER_PATH }}/Dockerfile
 
 
 
