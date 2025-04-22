@@ -16,10 +16,12 @@ jobs:
     steps:
       # Extract the comma separated list of repository to individual HFENDPOINTS_MODEl_REPOSITORY_<index>=<model_id>
       - name: "Extract image repositories"
+        env:
+          REPOSITORIES_JSON_TEMPLATE: echo '{"repository":$repositories}'
         run: |
           IFS=';' read -r -a __repositories__ <<< "${HFENDPOINTS_MODEL_REPOSITORIES}"
           REPOSITORIES_JSON_ARRAY=$(jq -c -n '$ARGS.positional' --args "${__repositories__[@]}")
-          REPOSITORIES_JSON_OBJECT=$(jq -n --argjson repositories ${REPOSITORIES_JSON_ARRAY} -f <(echo '{"repository":$repositories}'))
+          REPOSITORIES_JSON_OBJECT=$(jq -n --argjson repositories ${REPOSITORIES_JSON_ARRAY} -f < ${{ REPOSITORIES_JSON_TEMPLATE }})
 
           echo "Executing integration tests on the following repositories: ${REPOSITORIES_JSON_ARRAY}" >> $GITHUB_STEP_SUMMARY
           echo "REPOSITORIES=${REPOSITORIES_JSON_OBJECT}" >> "$GITHUB_OUTPUT"
