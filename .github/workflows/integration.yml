@@ -1,0 +1,18 @@
+name: Hugging Face Inference Endpoint integration tests
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build_target_matrix:
+    runs-on: ubuntu-latest
+    env:
+      HFENDPOINTS_MODEL_REPOSITORIES: "hfendpoints-images/whisper-vllm-gpu;"
+
+    steps:
+      - name: "Extract image repositories"
+        run: IFS=';' read -r -a repositories <<< "${HFENDPOINTS_MODEl_REPOSITORIES}
+
+      - name: "Print extracted image repositories"
+        run: echo $repositories
