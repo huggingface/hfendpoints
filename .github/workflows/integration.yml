@@ -11,18 +11,19 @@ jobs:
       HFENDPOINTS_MODEL_REPOSITORIES: "whisper-vllm-gpu;embeddings-llamacpp-cpu"
 
     steps:
+      # Extract the comma separated list of repository to individual HFENDPOINTS_MODEl_REPOSITORY_<index>=<model_id>
       - name: "Extract image repositories"
         run: |
           IFS=';' read -r -a repositories <<< "${HFENDPOINTS_MODEL_REPOSITORIES}"
-          echo "Fetching deployment information for: $repositories"
-          for index in "${!repositories[@]}"; do
-            echo "HFENDPOINTS_MODEL_REPOSITORIES_${index}=hfendpoints-images/${repositories[$index]}" >> "$GITHUB_ENV";
-          done
-          echo "HFENDPOINTS_MODEL_REPOSITORIES_COUNT=${#repositories[@]}" >> "$GITHUB_ENV"
+          REPOSITORY_JSON=`jq -c -n '$ARGS.positional' --args "${repositories[@]}"`
+          echo "repository=`jq -n --argjson repository $REPOSITORY_JSON -f <(echo '{"repository":[$repository]}')`" >> "$GITHUB_OUTPUT"
 
-      - name: "Build matrix"
-        run: |
-          for index in $(seq 0 $(( $HFENDPOINTS_MODEL_REPOSITORIES_COUNT - 1 )) ); do
-            REPOSITORY=HFENDPOINTS_MODEL_REPOSITORIES_$index
-            echo "Repository #${index} -> ${!REPOSITORY}"
-          done
+  deploy_endpoints:
+    runs-on: ubuntu-latest
+    needs: build_target_matrix
+    strategy:
+      fail-fast: true
+      matrix: ${{ fromJson(needs.build_target_matrix.outputs.repositories) }}
+    steps:
+      - name: "Fetch endpoint specs"
+        run: echo ${{ matrix.repository }}
