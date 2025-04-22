@@ -28,12 +28,25 @@ jobs:
           echo "Executing integration tests on the following repositories: ${REPOSITORIES_JSON_ARRAY}" >> $GITHUB_STEP_SUMMARY
           echo "repositories=${REPOSITORIES_JSON_OBJECT}" >> "$GITHUB_OUTPUT"
 
-  deploy_endpoints:
+  deploy:
     runs-on: ubuntu-latest7
     needs: build_target_matrix
     strategy:
       fail-fast: true
       matrix: ${{ fromJson(needs.build_target_matrix.outputs.repositories) }}
+      max-parallel: 10
     steps:
+      - name: "Install hfjobs"
+        run: python3 -m pip install hfjobs
+
+      - uses: actions/checkout@v4
+        with:
+          repository: https://github.com/huggingface/hf-cli
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: "Build & install Hugging Face CLI"
+        run: cargo build --release hf-cli
+
       - name: "Fetch endpoint specs"
         run: echo ${{ matrix.repository }}
+
