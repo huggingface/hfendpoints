@@ -7,7 +7,7 @@ on:
 jobs:
   build_target_matrix:
     outputs:
-      REPOSITORIES: string
+      repositories: ${{ steps.build_target_matrix.outputs.repositories }}
 
     runs-on: ubuntu-latest
     env:
@@ -22,14 +22,15 @@ jobs:
           REPOSITORIES_JSON_OBJECT=$(jq -c -n --argjson repositories ${REPOSITORIES_JSON_ARRAY} -f <(echo '{"repository":$repositories}'))
 
           echo "Executing integration tests on the following repositories: ${REPOSITORIES_JSON_OBJECT}" >> $GITHUB_STEP_SUMMARY
-          echo "REPOSITORIES=${REPOSITORIES_JSON_OBJECT}" >> "$GITHUB_OUTPUT"
+          echo "repositories=${REPOSITORIES_JSON_ARRAY}" >> "$GITHUB_OUTPUT"
 
   deploy_endpoints:
     runs-on: ubuntu-latest
     needs: build_target_matrix
+    if: ${{ needs.build_target_matrix.outputs.length > 0 }}
     strategy:
       fail-fast: true
-      matrix: ${{ fromJson(needs.build_target_matrix.outputs.REPOSITORIES) }}
+      matrix: ${{ fromJson(needs.build_target_matrix.outputs.repositories) }}
     steps:
       - name: "Fetch endpoint specs"
         run: echo ${{ matrix.repository }}
