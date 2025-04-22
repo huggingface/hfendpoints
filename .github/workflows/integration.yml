@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: "Extract image repositories"
-        run: IFS=';' read -r -a repositories <<< "${HFENDPOINTS_MODEl_REPOSITORIES}
+        run: IFS=';' read -r -a repositories <<< "${HFENDPOINTS_MODEl_REPOSITORIES}"
 
       - name: "Print extracted image repositories"
         run: echo $repositories
