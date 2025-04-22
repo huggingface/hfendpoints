@@ -43,6 +43,7 @@ jobs:
         with:
           repository: huggingface/hf-cli
           fetch-depth: '1'
+          token: ${{ secrets.HUGGINGFACE_CLI_TOKEN }}
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: "Build & install Hugging Face CLI"
