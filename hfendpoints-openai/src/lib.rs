@@ -81,7 +81,6 @@ where
 pub mod python {
     use hfendpoints_binding_python::tokio::create_multithreaded_runtime;
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
-    use hfendpoints_core::Endpoint;
     use pyo3::prelude::*;
     use pyo3::prepare_freethreaded_python;
     use pyo3_async_runtimes::tokio::init;

@@ -28,8 +28,8 @@ pub struct Usage {
     total_tokens: usize,
 }
 
-#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg_attr(feature = "python", pyclass(frozen))]
 #[derive(Clone, Serialize, ToSchema)]
 pub struct Embedding {
     object: &'static str,
@@ -39,7 +39,7 @@ pub struct Embedding {
 
 #[cfg_attr(feature = "python", pymethods)]
 impl Embedding {
-    #[cfg_attr(feature = "python", [new])]
+    #[cfg_attr(feature = "python", new)]
     pub fn new(index: usize, embedding: Vec<f32>) -> Self {
         Self { object: "embedding", index, embedding }
     }
@@ -47,7 +47,7 @@ impl Embedding {
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(feature = "python", pyclass(frozen, eq, eq_int))]
-#[derive(Clone, Copy, Serialize, ToSchema, PartialEq, Eq)]
+#[derive(Clone, Copy, Deserialize, Serialize, ToSchema, PartialEq, Eq)]
 pub enum EncodingFormat {
     Float,
     Base64,
@@ -65,7 +65,7 @@ pub struct EmbeddingResponse {
 
 #[cfg_attr(feature = "python", pymethods)]
 impl EmbeddingResponse {
-    #[cfg_attr(feature = "python", [new])]
+    #[cfg_attr(feature = "python", new)]
     pub fn new(data: Vec<Embedding>, model: String, usage: Usage) -> Self {
         Self { object: "list", data, model, usage }
     }
@@ -77,19 +77,26 @@ impl IntoResponse for EmbeddingResponse {
     }
 }
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Deserialize, ToSchema)]
 pub enum EmbeddingInput {
     Text(String),
     Tokens(Vec<u32>),
 }
 
-pub enum MaybeBatched<T> {
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Deserialize, ToSchema)]
+pub enum MaybeBatched<T>
+where
+    T: Clone + Sized,
+{
     Single(T),
     Batch(Vec<T>),
 }
 
+#[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(feature = "python", pyclass)]
-#[derive(Deserialize, ToSchema)]
+#[derive(Clone, Deserialize, ToSchema)]
 pub struct EmbeddingRequest {
     input: MaybeBatched<EmbeddingInput>,
     model: Option<String>,

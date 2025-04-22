@@ -482,7 +482,6 @@ pub(crate) mod python {
 
     #[pymethods]
     impl Transcription {
-        #[instrument]
         #[new]
         pub fn new(text: String) -> Self {
             Self { text }
@@ -491,7 +490,6 @@ pub(crate) mod python {
 
     #[pymethods]
     impl VerboseTranscription {
-        #[instrument(skip(segments))]
         #[new]
         pub fn new(text: String, duration: f32, language: String, segments: Vec<Segment>) -> Self {
             Self {
