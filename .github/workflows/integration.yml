@@ -42,6 +42,8 @@ jobs:
       fail-fast: true
       matrix: ${{ fromJson(needs.build_target_matrix.outputs.repositories) }}
       max-parallel: 10
+    env:
+      COMMIT_ID: ${{ github.event.pull_request.head.sha || env.GITHUB_SHA }}
     steps:
       - name: "Install hfjobs"
         run: python3 -m pip install hfjobs huggingface_hub
@@ -91,7 +93,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: false
-          tags: ${{ steps.metadata.outputs.tags }}
+          tags: ${{ env.COMMIT_ID }}
           annotations: ${{ steps.metadata.outputs.annotations }}
 
       - name: "Build endpoint container"
@@ -103,13 +105,15 @@ jobs:
           context: ${{ env.ENDPOINT_REPO_PATH }}
           push: true
           tags: mfuntowicz/${{ env.ENDPOINT_REPO }}:${{ env.ENDPOINT_REPO_SHA }}
+          build-args: |
+            - SDK_VERSION: ${{ env.COMMIT_ID }}
 
       - name: "Run unittest with hfjobs"
         run: |
           HARDWARE=$(cat ${ENDPOINT_REPO_HFJOBS_FOLDER_PATH}/deploy.json | jq -r '.hardware' )
           echo $(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.description' )" >> "$GITHUB_STEP_SUMMARY"
           echo "Running $(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.id' ) on ${HARDWARE}"
-          hfjobs run --timeout 1m --flavor $HARDWARE ${ENDPOINT_REPO_HFJOBS_FOLDER_PATH}/Dockerfile
+          hfjobs run --timeout 1m --flavor $HARDWARE ${{ steps.build_container_endpoint.outputs.imageid }}
 
 
 
