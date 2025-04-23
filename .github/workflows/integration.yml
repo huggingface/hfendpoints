@@ -21,14 +21,14 @@ jobs:
 
     runs-on: ubuntu-latest
     env:
-      HFENDPOINTS_MODEL_REPOSITORIES: "whisper-vllm-gpu;"
+      HFENDPOINTS_ENDPOINT_REPOSITORIES: "whisper-vllm-gpu;"
 
     steps:
-      # Extract the comma separated list of repository to individual HFENDPOINTS_MODEl_REPOSITORY_<index>=<model_id>
+      # Extract the comma separated list of repository to individual HFENDPOINTS_ENDPOINT_REPOSITORY_<index>=<model_id>
       - name: "Extract image repositories"
         id: "extract"
         run: |
-          IFS=';' read -r -a __repositories__ <<< "${HFENDPOINTS_MODEL_REPOSITORIES}"
+          IFS=';' read -r -a __repositories__ <<< "${HFENDPOINTS_ENDPOINT_REPOSITORIES}"
           REPOSITORIES_JSON_ARRAY=$(jq -c -n '$ARGS.positional' --args "${__repositories__[@]}")
           REPOSITORIES_JSON_OBJECT=$(jq -c -n --argjson repositories ${REPOSITORIES_JSON_ARRAY} -f <(echo '{"repository":$repositories}'))
 
@@ -60,24 +60,24 @@ jobs:
 
       - name: "Define global variables"
         env:
-          MODEL_REPO: ${{ matrix.repository }}
-          MODEL_PATH: ${{ format('./repos/{0}', matrix.repository) }}
+          ENDPOINT_REPO: ${{ matrix.repository }}
+          ENDPOINT_REPO_PATH: ${{ format('./repos/{0}', matrix.repository) }}
         run: |
-          export MODEL_HFJOBS_FOLDER_PATH=${MODEL_PATH}/.hfjobs
-          export MODEL_HFJOBS_DEPLOY_CONF_PATH=${MODEL_HFJOBS_FOLDER_PATH}/deploy.json
-          echo "MODEL_REPO=${MODEL_REPO}" >> "$GITHUB_ENV"
-          echo "MODEL_PATH=${MODEL_PATH}" >> "$GITHUB_ENV"
-          echo "MODEL_HFJOBS_FOLDER_PATH=${MODEL_HFJOBS_FOLDER_PATH}" >> "$GITHUB_ENV"
-          echo "MODEL_HFJOBS_DEPLOY_CONF_PATH=${MODEL_HFJOBS_DEPLOY_CONF_PATH}" >> "$GITHUB_ENV"
+          export ENDPOINT_REPO_HFJOBS_FOLDER_PATH=${ENDPOINT_REPO_PATH}/.hfjobs
+          export ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH=${ENDPOINT_REPO_HFJOBS_FOLDER_PATH}/deploy.json
+          echo "ENDPOINT_REPO=${ENDPOINT_REPO}" >> "$GITHUB_ENV"
+          echo "ENDPOINT_REPO_PATH=${ENDPOINT_REPO_PATH}" >> "$GITHUB_ENV"
+          echo "ENDPOINT_REPO_HFJOBS_FOLDER_PATH=${ENDPOINT_REPO_HFJOBS_FOLDER_PATH}" >> "$GITHUB_ENV"
+          echo "ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH=${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH}" >> "$GITHUB_ENV"
 
       - name: "Fetch endpoint specs"
         run: |
-          echo "Fetching repository .hfjobs content for ${MODEL_REPO}"
+          echo "Fetching repository .hfjobs content for ${ENDPOINT_REPO}"
           huggingface-cli login --token ${HF_TOKEN}
-          huggingface-cli download hfendpoints-images/${MODEL_REPO} --local-dir ${MODEL_PATH}
+          huggingface-cli download hfendpoints-images/${ENDPOINT_REPO} --local-dir ${ENDPOINT_REPO_PATH}
 
       - name: "Ensure endpoint has .hfjobs folder"
-        if: ${{ hashFiles(env.MODEL_HFJOBS_DEPLOY_CONF_PATH) != '' }}
+        if: ${{ hashFiles(env.ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH) != '' }}
         run: echo "Found .hfjobs folder"
 
       - name: "Extract metadata information"
@@ -95,12 +95,22 @@ jobs:
           tags: ${{ steps.metadata.outputs.tags }}
           annotations: ${{ steps.metadata.outputs.annotations }}
 
+      - name: "Build endpoint container"
+        id: build_container_endpoint
+        env:
+          ENDPOINT_REPO_SHA: "latest"
+        uses: docker/build-push-action@v6
+        with:
+          file: ${ENDPOINT_REPO_HFJOBS_FOLDER_PATH}/Dockerfile
+          push: true
+          tags: mfuntowicz/${ENDPOINT_REPO}:${ENDPOINT_REPO_SHA}
+
       - name: "Run unittest with hfjobs"
         run: |
-          HARDWARE=$(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.hardware' )
-          echo "Running $(cat ${MODEL_HFJOBS_DEPLOY_CONF_PATH} | jq '.id' ) on ${HARDWARE}"
-          echo -e "\t -> $(cat ${MODEL_HFJOBS_DEPLOY_CONF_PATH} | jq '.description' )"
-          hfjobs run --timeout 1m --flavor $HARDWARE ${MODEL_HFJOBS_FOLDER_PATH}/Dockerfile
+          HARDWARE=$(cat ${ENDPOINT_REPO_HFJOBS_FOLDER_PATH}/deploy.json | jq -r '.hardware' )
+          echo $(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.description' )" >> "$GITHUB_STEP_SUMMARY"
+          echo "Running $(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.id' ) on ${HARDWARE}"
+          hfjobs run --timeout 1m --flavor $HARDWARE ${ENDPOINT_REPO_HFJOBS_FOLDER_PATH}/Dockerfile
 
 
 
