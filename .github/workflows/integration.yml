@@ -59,14 +59,18 @@ jobs:
           HF_TOKEN: ${{ secrets.HUB_HFENDPOINTS_IMAGES_ORG_TOKEN }}
           MODEL_REPO: ${{ matrix.repository }}
           MODEL_PATH: ${{ format('./repos/{0}', matrix.repository) }}
+          MODEL_HFJOBS_FOLDER_PATH: ${{ format('{0}/.hfjobs', env.MODEL_PATH) }}
+          MODEL_HFJOBS_DEPLOY_CONF_PATH: ${{ format('{0}/deploy.json', env.MODEL_HFJOBS_FOLDER_PATH) }}
         run: |
           echo "MODEL_PATH=${MODEL_PATH}" >> "$GITHUB_ENV"
+          echo "MODEL_HFJOBS_FOLDER_PATH=${MODEL_HFJOBS_FOLDER_PATH}" >> "$GITHUB_ENV"
+          echo "MODEL_HFJOBS_DEPLOY_CONF_PATH=${MODEL_HFJOBS_DEPLOY_CONF_PATH}" >> "$GITHUB_ENV"
           echo "Fetching repository .hfjobs content for ${MODEL_REPO}"
           huggingface-cli login --token ${HF_TOKEN}
           huggingface-cli download hfendpoints-images/${MODEL_REPO} --local-dir ${MODEL_PATH}
 
       - name: "Ensure endpoint has .hfjobs folder"
-        if: ${{ hashFiles(env.MODEL_HFJOBS_FOLDER_PATH) != '' }}
+        if: ${{ hashFiles(env.MODEL_HFJOBS_DEPLOY_CONF_PATH) != '' }}
         run: echo "Found .hfjobs folder"
 
       - name: "Extract metadata information"
@@ -86,7 +90,6 @@ jobs:
 
       - name: "Run unittest with hfjobs"
         env:
-          MODEL_HFJOBS_FOLDER_PATH: ${{ format('{0}/.hfjobs', env.MODEL_PATH) }}
         run: |
           HARDWARE=$(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.hardware' )
           echo "Running $(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.id' ) on ${HARDWARE}"
