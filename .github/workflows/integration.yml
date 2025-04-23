@@ -89,11 +89,10 @@ jobs:
           annotations: ${{ steps.metadata.outputs.annotations }}
 
       - name: "Run unittest with hfjobs"
-        env:
         run: |
           HARDWARE=$(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.hardware' )
-          echo "Running $(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.id' ) on ${HARDWARE}"
-          echo -e "\t -> $(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.description' )"
+          echo "Running $(cat ${MODEL_HFJOBS_DEPLOY_CONF_PATH} | jq '.id' ) on ${HARDWARE}"
+          echo -e "\t -> $(cat ${MODEL_HFJOBS_DEPLOY_CONF_PATH} | jq '.description' )"
           hfjobs run --timeout 1m --flavor $HARDWARE ${MODEL_HFJOBS_FOLDER_PATH}/Dockerfile
 
 
