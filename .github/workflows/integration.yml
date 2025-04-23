@@ -57,7 +57,7 @@ jobs:
           MODEL_REPO: ${{ matrix.repository }}
         run: |
           echo "Fetching repository .hfjobs content for ${MODEL_REPO}"
-          huggingface-cli login ${HF_TOKEN}
+          huggingface-cli login --token ${HF_TOKEN}
           huggingface-cli download hfendpoints-images/${MODEL_REPO} --cache-dir ./repos/${MODEL_REPO}
 
       - name: "Run test with hfjobs"
