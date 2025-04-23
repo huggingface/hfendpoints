@@ -134,7 +134,7 @@ jobs:
       - name: "Run unittest with hfjobs"
         run: |
           HARDWARE=$(cat ${ENDPOINT_REPO_HFJOBS_FOLDER_PATH}/deploy.json | jq -r '.hardware' )
-          echo $(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.description' )" >> "$GITHUB_STEP_SUMMARY"
+          echo "$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.description' )" >> "$GITHUB_STEP_SUMMARY"
           echo "Running $(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.id' ) on ${HARDWARE}"
           hfjobs run --timeout 1m --flavor $HARDWARE mfuntowicz/${{ env.ENDPOINT_REPO }}:${{ env.COMMIT_ID }}
 
