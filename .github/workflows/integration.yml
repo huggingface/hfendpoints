@@ -39,13 +39,6 @@ jobs:
       matrix: ${{ fromJson(needs.build_target_matrix.outputs.repositories) }}
       max-parallel: 10
     steps:
-      - name: "Setup context"
-        env:
-          COMMIT_ID: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          echo "Executing over commit: ${COMMIT_ID}"
-          echo "COMMIT_ID=${COMMIT_ID}" >> "$GITHUB_ENV"
-
       - name: "Install hfjobs"
         run: python3 -m pip install hfjobs huggingface_hub
 
@@ -72,15 +65,20 @@ jobs:
           huggingface-cli login --token ${HF_TOKEN}
           huggingface-cli download hfendpoints-images/${MODEL_REPO} --local-dir ${MODEL_PATH}
 
-      - name: "Setup Docker Buildx"
-        uses: docker/setup-buildx-actions@v3
+      - name: "Extract metadata information"
+        id: metadata
+        uses: docker/metadata-actions@v5
+        with:
+          images: huggingface/endpoints-sdk
 
       - name: "Build SDK container"
+        id: build_container_sdk
         uses: docker/build-push-action@v6
         with:
           file: Dockerfile
           push: false
-          tags: huggingface/endpoints-sdk:${COMMIT_ID}
+          tags: ${{ steps.metadata.outputs.tags }}
+          annotations: ${{ steps.metadata.outputs.annotations }}
 
       - name: "Run unittest with hfjobs"
         env:
