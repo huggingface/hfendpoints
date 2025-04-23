@@ -60,7 +60,7 @@ jobs:
           echo "MODEL_PATH=${MODEL_PATH}" >> "$GITHUB_ENV"
           echo "Fetching repository .hfjobs content for ${MODEL_REPO}"
           huggingface-cli login --token ${HF_TOKEN}
-          huggingface-cli download hfendpoints-images/${MODEL_REPO} --cache-dir ${MODEL_PATH}
+          huggingface-cli download hfendpoints-images/${MODEL_REPO} --local-dir ${MODEL_PATH}
 
       - name: "Run test with hfjobs"
         env:
