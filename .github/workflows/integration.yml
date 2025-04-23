@@ -64,8 +64,7 @@ jobs:
 
       - name: "Run test with hfjobs"
         env:
-          MODEL_HFJOBS_FOLDER_PATH: ${{ format('{0}/.hfjobs/deploy.json', env.MODEL_PATH) }}
-        if: ${{ hashFiles(env.MODEL_HFJOBS_FOLDER_PATH) != '' }}
+          MODEL_HFJOBS_FOLDER_PATH: ${{ format('{0}/.hfjobs', env.MODEL_PATH) }}
         run: |
           echo "Running $(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.id' )"
           echo "\t -> $(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.description' )"
