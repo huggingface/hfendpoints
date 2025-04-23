@@ -65,6 +65,10 @@ jobs:
           huggingface-cli login --token ${HF_TOKEN}
           huggingface-cli download hfendpoints-images/${MODEL_REPO} --local-dir ${MODEL_PATH}
 
+      - name: "Ensure endpoint has .hfjobs folder"
+        if: ${{ hashFiles(env.MODEL_HFJOBS_FOLDER_PATH) != '' }}
+        run: echo "Found .hfjobs folder"
+
       - name: "Extract metadata information"
         id: metadata
         uses: docker/metadata-action@v5
@@ -83,7 +87,6 @@ jobs:
       - name: "Run unittest with hfjobs"
         env:
           MODEL_HFJOBS_FOLDER_PATH: ${{ format('{0}/.hfjobs', env.MODEL_PATH) }}
-        if: ${{ hashFiles(env.MODEL_HFJOBS_FOLDER_PATH) != '' }}
         run: |
           HARDWARE=$(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.hardware' )
           echo "Running $(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.id' ) on ${HARDWARE}"
