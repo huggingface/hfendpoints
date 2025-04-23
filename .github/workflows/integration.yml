@@ -97,7 +97,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: false
-          tags: ${{ format('huggingface/hfendpoints-sdk:{1}', env.COMMIT_ID) }}
+          tags: ${{ format('huggingface/hfendpoints-sdk:{0}', env.COMMIT_ID) }}
           annotations: ${{ steps.metadata.outputs.annotations }}
 
       - name: "Build endpoint container"
