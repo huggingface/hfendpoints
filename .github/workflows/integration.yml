@@ -127,7 +127,7 @@ jobs:
         with:
           context: ${{ env.ENDPOINT_REPO_PATH }}
           push: true
-          tags: mfuntowicz/${{ env.ENDPOINT_REPO }}:${{ env.ENDPOINT_REPO_SHA }}
+          tags: mfuntowicz/${{ env.ENDPOINT_REPO }}:${{ env.COMMIT_ID }}
           build-args: |
             SDK_VERSION=${{ env.COMMIT_ID }}
 
@@ -136,7 +136,7 @@ jobs:
           HARDWARE=$(cat ${ENDPOINT_REPO_HFJOBS_FOLDER_PATH}/deploy.json | jq -r '.hardware' )
           echo $(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.description' )" >> "$GITHUB_STEP_SUMMARY"
           echo "Running $(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.id' ) on ${HARDWARE}"
-          hfjobs run --timeout 1m --flavor $HARDWARE ${{ steps.build_container_endpoint.outputs.imageid }}
+          hfjobs run --timeout 1m --flavor $HARDWARE mfuntowicz/${{ env.ENDPOINT_REPO }}:${{ env.COMMIT_ID }}
 
 
 
