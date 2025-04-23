@@ -110,7 +110,7 @@ jobs:
           push: true
           tags: mfuntowicz/${{ env.ENDPOINT_REPO }}:${{ env.ENDPOINT_REPO_SHA }}
           build-args: |
-            - SDK_VERSION: ${{ env.COMMIT_ID }}
+            SDK_VERSION=${{ env.COMMIT_ID }}
 
       - name: "Run unittest with hfjobs"
         run: |
