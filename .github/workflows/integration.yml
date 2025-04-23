@@ -7,6 +7,10 @@ on:
     types:
       - checks_requested
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-build
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -36,7 +40,8 @@ jobs:
           echo "repositories=${REPOSITORIES_JSON_OBJECT}" >> "$GITHUB_OUTPUT"
 
   deploy:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: aws-general-8-plus
     needs: build_target_matrix
     strategy:
       fail-fast: true
