@@ -63,9 +63,9 @@ jobs:
           MODEL_REPO: ${{ matrix.repository }}
           MODEL_PATH: ${{ format('./repos/{0}', matrix.repository) }}
         run: |
-          MODEL_PATH=${MODEL_PATH}
-          MODEL_HFJOBS_FOLDER_PATH=${MODEL_PATH}/.hfjobs
-          MODEL_HFJOBS_DEPLOY_CONF_PATH=${MODEL_HFJOBS_FOLDER_PATH}/deploy.json
+          export MODEL_PATH=${MODEL_PATH}
+          export MODEL_HFJOBS_FOLDER_PATH=${MODEL_PATH}/.hfjobs
+          export MODEL_HFJOBS_DEPLOY_CONF_PATH=${MODEL_HFJOBS_FOLDER_PATH}/deploy.json
           echo "MODEL_PATH" >> "$GITHUB_ENV"
           echo "MODEL_HFJOBS_FOLDER_PATH" >> "$GITHUB_ENV"
           echo "MODEL_HFJOBS_DEPLOY_CONF_PATH" >> "$GITHUB_ENV"
