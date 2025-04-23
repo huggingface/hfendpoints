@@ -67,9 +67,9 @@ jobs:
           MODEL_HFJOBS_FOLDER_PATH: ${{ format('{0}/.hfjobs', env.MODEL_PATH) }}
         if: ${{ hashFiles(env.MODEL_HFJOBS_FOLDER_PATH) != '' }}
         run: |
-          echo "Running $(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.id' )"
-          echo "\t -> $(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.description' )"
-          HARDWARE=$(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.hardware' )"
+          HARDWARE=$(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.hardware' )
+          echo "Running $(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.id' ) on ${HARDWARE}"
+          echo -e "\t -> $(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.description' )"
           hfjobs run --timeout 1m --flavor $HARDWARE ${MODEL_HFJOBS_FOLDER_PATH}/Dockerfile
 
 
