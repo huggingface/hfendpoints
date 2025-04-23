@@ -101,7 +101,7 @@ jobs:
           ENDPOINT_REPO_SHA: "latest"
         uses: docker/build-push-action@v6
         with:
-          file: ${ENDPOINT_REPO_HFJOBS_FOLDER_PATH}/Dockerfile
+          file: ${{ format('{0}/Dockerfile', env.ENDPOINT_REPO_HFJOBS_FOLDER_PATH) }}
           push: true
           tags: mfuntowicz/${{ env.ENDPOINT_REPO }}:${{ env.ENDPOINT_REPO_SHA }}
 
