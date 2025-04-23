@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+# Define global environment variables
+env:
+  HF_TOKEN: ${{ secrets.HUB_HFENDPOINTS_IMAGES_ORG_TOKEN }}
+
 jobs:
   build_target_matrix:
     outputs:
@@ -54,15 +58,21 @@ jobs:
       #      - name: "Build & install Hugging Face CLI"
       #        run: cargo build --release hf-cli
 
-      - name: "Fetch endpoint specs"
+      - name: "Define global variables"
         env:
-          HF_TOKEN: ${{ secrets.HUB_HFENDPOINTS_IMAGES_ORG_TOKEN }}
           MODEL_REPO: ${{ matrix.repository }}
           MODEL_PATH: ${{ format('./repos/{0}', matrix.repository) }}
         run: |
-          echo "MODEL_PATH=${MODEL_PATH}" >> "$GITHUB_ENV"
-          echo "MODEL_HFJOBS_FOLDER_PATH=${MODEL_PATH}/.hfjobs" >> "$GITHUB_ENV"
-          echo "MODEL_HFJOBS_DEPLOY_CONF_PATH=${MODEL_HFJOBS_FOLDER_PATH}/deploy.json" >> "$GITHUB_ENV"
+          MODEL_PATH=${MODEL_PATH}
+          MODEL_HFJOBS_FOLDER_PATH=${MODEL_PATH}/.hfjobs
+          MODEL_HFJOBS_DEPLOY_CONF_PATH=${MODEL_HFJOBS_FOLDER_PATH}/deploy.json
+          echo "MODEL_PATH" >> "$GITHUB_ENV"
+          echo "MODEL_HFJOBS_FOLDER_PATH" >> "$GITHUB_ENV"
+          echo "MODEL_HFJOBS_DEPLOY_CONF_PATH" >> "$GITHUB_ENV"
+
+      - name: "Fetch endpoint specs"
+        run: |
+
           echo "Fetching repository .hfjobs content for ${MODEL_REPO}"
           huggingface-cli login --token ${HF_TOKEN}
           huggingface-cli download hfendpoints-images/${MODEL_REPO} --local-dir ${MODEL_PATH}
