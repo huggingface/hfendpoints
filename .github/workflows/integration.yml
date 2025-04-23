@@ -99,6 +99,12 @@ jobs:
         if: ${{ hashFiles(env.ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH) != '' }}
         run: echo "Found .hfjobs folder"
 
+      - name: "Docker login"
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
       - name: "Extract metadata information"
         id: metadata
         uses: docker/metadata-action@v5
