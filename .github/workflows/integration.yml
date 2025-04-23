@@ -52,10 +52,13 @@ jobs:
       #        run: cargo build --release hf-cli
 
       - name: "Fetch endpoint specs"
+        env:
+          HF_TOKEN: ${{ secrets.HUB_HFENDPOINTS_IMAGES_ORG_TOKEN }}
+          MODEL_REPO: ${{ matrix.repository }}
         run: |
-          echo "Fetching repository .hfjobs content for ${{ matrix.repository }}"
-          huggingface-cli login ${{ secrets.HUB_HFENDPOINTS_IMAGES_ORG_TOKEN }}
-          huggingface-cli download hfendpoints-images/${{ matrix.repository }} --cache-dir ./repos/${{ matrix.repository }}
+          echo "Fetching repository .hfjobs content for ${MODEL_REPO}"
+          huggingface-cli login ${HF_TOKEN}
+          huggingface-cli download hfendpoints-images/${MODEL_REPO} --cache-dir ./repos/${MODEL_REPO}
 
       - name: "Run test with hfjobs"
         env:
