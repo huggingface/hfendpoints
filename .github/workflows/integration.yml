@@ -55,16 +55,16 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HUB_HFENDPOINTS_IMAGES_ORG_TOKEN }}
           MODEL_REPO: ${{ matrix.repository }}
+          MODEL_PATH: ${{ format('./repos/{0}', matrix.repository) }}
         run: |
           echo "Fetching repository .hfjobs content for ${MODEL_REPO}"
           huggingface-cli login --token ${HF_TOKEN}
-          huggingface-cli download hfendpoints-images/${MODEL_REPO} --cache-dir ./repos/${MODEL_REPO}
+          huggingface-cli download hfendpoints-images/${MODEL_REPO} --cache-dir ${MODEL_PATH}
 
       - name: "Run test with hfjobs"
         env:
-          MODEL_PATH: ${{ format('repos/{0}', matrix.repository) }}
           MODEL_HFJOBS_FOLDER_PATH: ${{ format('{0}/.hfjobs', env.MODEL_PATH) }}
-        if: ${{ hashFiles(env.MODEL_HFJOBS_FOLDER_PATH) != '' }}
+        # if: ${{ hashFiles(env.MODEL_HFJOBS_FOLDER_PATH) != '' }}
         run: |
           echo "Running $(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.id' )"
           echo "\t -> $(cat ${MODEL_HFJOBS_FOLDER_PATH}/deploy.json | jq '.description' )"
