@@ -90,14 +90,14 @@ jobs:
         id: metadata
         uses: docker/metadata-action@v5
         with:
-          images: huggingface/endpoints-sdk
+          images: huggingface/hfendpoints-sdk
 
       - name: "Build SDK container"
         id: build_container_sdk
         uses: docker/build-push-action@v6
         with:
           push: false
-          tags: ${{ env.COMMIT_ID }}
+          tags: ${{ format('huggingface/hfendpoints-sdk:{1}', env.COMMIT_ID) }}
           annotations: ${{ steps.metadata.outputs.annotations }}
 
       - name: "Build endpoint container"
