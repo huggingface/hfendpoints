@@ -61,7 +61,7 @@ jobs:
           MODEL_PATH: ${{ format('./repos/{0}', matrix.repository) }}
         run: |
           echo "MODEL_PATH=${MODEL_PATH}" >> "$GITHUB_ENV"
-          echo "MODEL_HFJOBS_FOLDER_PATH=./repos/${MODEL_PATH}" >> "$GITHUB_ENV"
+          echo "MODEL_HFJOBS_FOLDER_PATH=${MODEL_PATH}/.hfjobs" >> "$GITHUB_ENV"
           echo "MODEL_HFJOBS_DEPLOY_CONF_PATH=${MODEL_HFJOBS_FOLDER_PATH}/deploy.json" >> "$GITHUB_ENV"
           echo "Fetching repository .hfjobs content for ${MODEL_REPO}"
           huggingface-cli login --token ${HF_TOKEN}
