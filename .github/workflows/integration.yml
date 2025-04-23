@@ -103,7 +103,7 @@ jobs:
         with:
           file: ${ENDPOINT_REPO_HFJOBS_FOLDER_PATH}/Dockerfile
           push: true
-          tags: mfuntowicz/${ENDPOINT_REPO}:${ENDPOINT_REPO_SHA}
+          tags: mfuntowicz/${{ env.ENDPOINT_REPO }}:${{ env.ENDPOINT_REPO_SHA }}
 
       - name: "Run unittest with hfjobs"
         run: |
