@@ -90,7 +90,6 @@ jobs:
         id: build_container_sdk
         uses: docker/build-push-action@v6
         with:
-          file: Dockerfile
           push: false
           tags: ${{ steps.metadata.outputs.tags }}
           annotations: ${{ steps.metadata.outputs.annotations }}
@@ -101,7 +100,7 @@ jobs:
           ENDPOINT_REPO_SHA: "latest"
         uses: docker/build-push-action@v6
         with:
-          file: ${{ format('{0}/Dockerfile', env.ENDPOINT_REPO_HFJOBS_FOLDER_PATH) }}
+          context: ${{ env.ENDPOINT_REPO_PATH }}
           push: true
           tags: mfuntowicz/${{ env.ENDPOINT_REPO }}:${{ env.ENDPOINT_REPO_SHA }}
 
