@@ -17,7 +17,7 @@ jobs:
 
     runs-on: ubuntu-latest
     env:
-      HFENDPOINTS_MODEL_REPOSITORIES: "whisper-vllm-gpu;embeddings-llamacpp-cpu"
+      HFENDPOINTS_MODEL_REPOSITORIES: "whisper-vllm-gpu;"
 
     steps:
       # Extract the comma separated list of repository to individual HFENDPOINTS_MODEl_REPOSITORY_<index>=<model_id>
