@@ -89,7 +89,9 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('./hfcli/**/Cargo.lock') }}
 
       - name: "Build & install Hugging Face CLI"
-        run: cd ./hfcli && cargo build --release
+        run: |
+          cd ./hfcli && cargo build --release
+          echo "HF_CLI=./hfcli/target/release/hf" >> "$GITHUB_ENV"
 
       - name: "Define global variables"
         env:
@@ -145,12 +147,47 @@ jobs:
           build-args: |
             SDK_VERSION=${{ env.COMMIT_ID }}
 
-      - name: "Run unittest with hfjobs"
+      - name: "Deploy endpoint"
+        id: deploy_endpoint
         run: |
-          HARDWARE=$(cat ${ENDPOINT_REPO_HFJOBS_FOLDER_PATH}/deploy.json | jq -r '.hardware' )
+          INSTANCE_TYPE=$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.instance_type' )
+          INSTANCE_SIZE=$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.instance_size' )
+          MODEL=$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.model' )
+          ENDPOINT_DETAILS=$(${HF_CLI} endpoint create \
+            --wait \
+            --output json \
+            --provider aws \
+            --region us-east-1 \
+            --container custom \
+            --model ${MODEL} \
+            --instance-type ${INSTANCE_TYPE} \
+            --instance-size ${INSTANCE_SIZE})
+          echo "ENDPOINT_NAME=$(cat ${ENDPOINT_DETAILS} | jq -r '.[].name')" >> "$GITHUB_ENV"
+          echo "ENDPOINT_URL=$(cat ${ENDPOINT_DETAILS} | jq -r '.[].url')" >> "$GITHUB_ENV"
+
+      - name: "Build test runner container from the image repo"
+        id: build_container_test_runner
+        if: ${{ steps.deploy_endpoint.outcome == 'success' }}
+        continue-on-error: true
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.ENDPOINT_REPO_PATH }}
+          file: ${{ format('{0}/Dockerfile', env.ENDPOINT_REPO_HFJOBS_FOLDER_PATH) }}
+          push: true
+          tags: mfuntowicz/${{ format('{0}-test', env.ENDPOINT_REPO) }}:${{ env.COMMIT_ID }}
+          build-args: |
+            ENDPOINT_URL=${{ env.ENDPOINT_URL }}
+
+      - name: "Run unittest with hfjobs"
+        if: ${{ steps.build_container_test_runner.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          MODEL=$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.model' )
           echo "$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.description' )" >> "$GITHUB_STEP_SUMMARY"
           echo "Running $(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.id' ) on ${HARDWARE}"
-          hfjobs run --timeout 5m
+          hfjobs run --timeout 10m ${{ steps.build_container_test_runner.outputs.imageid }}
 
-
+      - name: "Delete endpoint"
+        if: ${{ steps.deploy_endpoint.outcome == 'success' }}
+        run: $(${HF_CLI} endpoint delete ${ENDPOINT_NAME}
 
