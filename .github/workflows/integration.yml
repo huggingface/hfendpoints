@@ -90,7 +90,7 @@ jobs:
 
       - name: "Build & install Hugging Face CLI"
         run: |
-          cd ./hfcli && cargo build --release
+          cd ./hfcli && cargo build --release --all-features
           echo "HF_CLI=./hfcli/target/release/hf" >> "$GITHUB_ENV"
 
       - name: "Define global variables"
