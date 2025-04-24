@@ -159,7 +159,7 @@ jobs:
             --provider aws \
             --region us-east-1 \
             --container custom \
-            --container-url ${{ steps.build_container_endpoint.outputs.imageid }} \
+            --container-url ${{ format('mfuntowicz/{0}:{1}', env.ENDPOINT_REPO, env.COMMIT_ID) }} \
             --model ${MODEL} \
             --instance-type ${INSTANCE_TYPE} \
             --instance-size ${INSTANCE_SIZE})
@@ -175,7 +175,7 @@ jobs:
           context: ${{ env.ENDPOINT_REPO_PATH }}
           file: ${{ format('{0}/Dockerfile', env.ENDPOINT_REPO_HFJOBS_FOLDER_PATH) }}
           push: true
-          tags: mfuntowicz/${{ format('{0}-test', env.ENDPOINT_REPO) }}:${{ env.COMMIT_ID }}
+          tags: ${{ format('mfuntowicz/{0}-test:{1}', env.ENDPOINT_REPO, env.COMMIT_ID) }}
           build-args: |
             ENDPOINT_URL=${{ env.ENDPOINT_URL }}
 
