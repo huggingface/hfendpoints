@@ -190,5 +190,5 @@ jobs:
 
       - name: "Delete endpoint"
         if: ${{ steps.deploy_endpoint.outcome == 'success' }}
-        run: $(${HF_CLI} endpoints delete ${ENDPOINT_NAME}
+        run: $(${HF_CLI} endpoints delete ${ENDPOINT_NAME})
 
