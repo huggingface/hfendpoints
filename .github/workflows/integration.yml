@@ -186,7 +186,7 @@ jobs:
           MODEL=$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.model' )
           echo "$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.description' )" >> "$GITHUB_STEP_SUMMARY"
           echo "Running $(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.id' ) on ${HARDWARE}"
-          hfjobs run --timeout 10m ${{ steps.build_container_test_runner.outputs.imageid }}
+          hfjobs run --timeout 10m ${{ format('mfuntowicz/{0}-test:{1}', env.ENDPOINT_REPO, env.COMMIT_ID) }}
 
       - name: "Delete endpoint"
         if: ${{ steps.deploy_endpoint.outcome == 'success' }}
