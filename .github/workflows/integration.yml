@@ -163,8 +163,8 @@ jobs:
             --model ${MODEL} \
             --instance-type ${INSTANCE_TYPE} \
             --instance-size ${INSTANCE_SIZE})
-          echo "ENDPOINT_NAME=$(cat ${ENDPOINT_DETAILS} | jq -r '.[].name')" >> "$GITHUB_ENV"
-          echo "ENDPOINT_URL=$(cat ${ENDPOINT_DETAILS} | jq -r '.[].url')" >> "$GITHUB_ENV"
+          echo "ENDPOINT_NAME=`jq -r '.[].name' <<< ${ENDPOINT_DETAILS}`" >> "$GITHUB_ENV"
+          echo "ENDPOINT_URL=`jq -r '.[].url' <<< ${ENDPOINT_DETAILS}`" >> "$GITHUB_ENV"
           echo "Successfully started endpoint ${ENDPOINT_NAME}"
 
       - name: "Build test runner container from the image repo"
@@ -187,7 +187,7 @@ jobs:
           MODEL=$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.model' )
           echo "$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.description' )" >> "$GITHUB_STEP_SUMMARY"
           echo "Running $(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.id' ) on ${HARDWARE}"
-          hfjobs run --timeout 10m --secrets OPENAI_API_KEY=${{ env.HF_TOKEN }} ${{ format('mfuntowicz/{0}-test:{1}', env.ENDPOINT_REPO, env.COMMIT_ID) }}
+          hfjobs run --timeout 10m --secret OPENAI_API_KEY=${{ env.HF_TOKEN }} ${{ format('mfuntowicz/{0}-test:{1}', env.ENDPOINT_REPO, env.COMMIT_ID) }}
 
       - name: "Delete endpoint"
         if: ${{ steps.deploy_endpoint.outcome == 'success' }}
