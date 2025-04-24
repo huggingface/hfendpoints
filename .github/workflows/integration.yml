@@ -165,7 +165,7 @@ jobs:
             --instance-size ${INSTANCE_SIZE})
           echo "ENDPOINT_NAME=$(cat ${ENDPOINT_DETAILS} | jq -r '.[].name')" >> "$GITHUB_ENV"
           echo "ENDPOINT_URL=$(cat ${ENDPOINT_DETAILS} | jq -r '.[].url')" >> "$GITHUB_ENV"
-          echo "Successfully started endpoint: ${ENDPOINT_NAME}"
+          echo "Successfully started endpoint ${ENDPOINT_NAME}"
 
       - name: "Build test runner container from the image repo"
         id: build_container_test_runner
