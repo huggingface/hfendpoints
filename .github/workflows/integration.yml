@@ -153,7 +153,7 @@ jobs:
           INSTANCE_TYPE=$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.instance_type' )
           INSTANCE_SIZE=$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.instance_size' )
           MODEL=$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.model' )
-          ENDPOINT_DETAILS=$(${HF_CLI} endpoint create \
+          ENDPOINT_DETAILS=$(${HF_CLI} endpoints create \
             --wait \
             --output json \
             --provider aws \
@@ -189,5 +189,5 @@ jobs:
 
       - name: "Delete endpoint"
         if: ${{ steps.deploy_endpoint.outcome == 'success' }}
-        run: $(${HF_CLI} endpoint delete ${ENDPOINT_NAME}
+        run: $(${HF_CLI} endpoints delete ${ENDPOINT_NAME}
 
