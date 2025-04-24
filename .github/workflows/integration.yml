@@ -74,6 +74,9 @@ jobs:
           ref: 'main'
           token: ${{ secrets.HUGGINGFACE_CLI_TOKEN }}
 
+      - name: "Generate lockfile for hf endpoints CLI"
+        run: cargo generate-lockfile hfcli
+
       - uses: actions/cache@v4
         with:
           path: |
@@ -82,7 +85,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             hfcli/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('hfcli/**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('./hfcli/**/Cargo.lock') }}
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: "Build & install Hugging Face CLI"
