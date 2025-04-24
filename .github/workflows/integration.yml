@@ -76,7 +76,7 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: "Generate lockfile for hf endpoints CLI"
-        run: cargo generate-lockfile hfcli
+        run: cd ./hfcli && cargo generate-lockfile hfcli
 
       - uses: actions/cache@v4
         with:
@@ -85,11 +85,11 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            hfcli/target/
+            ./hfcli/target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('./hfcli/**/Cargo.lock') }}
 
       - name: "Build & install Hugging Face CLI"
-        run: cargo build --release hfcli
+        run: cd ./hfcli && cargo build --release
 
       - name: "Define global variables"
         env:
@@ -150,7 +150,7 @@ jobs:
           HARDWARE=$(cat ${ENDPOINT_REPO_HFJOBS_FOLDER_PATH}/deploy.json | jq -r '.hardware' )
           echo "$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.description' )" >> "$GITHUB_STEP_SUMMARY"
           echo "Running $(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.id' ) on ${HARDWARE}"
-          hfjobs run --timeout 1h
+          hfjobs run --timeout 5m
 
 
 
