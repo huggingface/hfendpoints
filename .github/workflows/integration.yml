@@ -159,6 +159,7 @@ jobs:
             --provider aws \
             --region us-east-1 \
             --container custom \
+            --container-url ${{ steps.build_container_endpoint.outputs.imageid }}
             --model ${MODEL} \
             --instance-type ${INSTANCE_TYPE} \
             --instance-size ${INSTANCE_SIZE})
