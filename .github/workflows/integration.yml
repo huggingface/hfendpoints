@@ -86,7 +86,7 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: "Build & install Hugging Face CLI"
-        run: cargo build --release hf-cli
+        run: cargo build --release hfcli
 
       - name: "Define global variables"
         env:
