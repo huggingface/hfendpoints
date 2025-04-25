@@ -75,14 +75,15 @@ jobs:
   hfendpoints-workspace-all-features:
     needs: basics
     name: Build & tests hfendpoints
-    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os:
-          - windows-latest
-          - ubuntu-latest
-          - macos-latest
+        os: [ windows-latest, ubuntu-latest, macos-latest ]
+        python: [ 3.12, 3.13, 3.14 ]
+    runs-on: ${{ matrix.os }}
     steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }
       - uses: actions/checkout@v4
       - name: Build
         run: cargo build --verbose
