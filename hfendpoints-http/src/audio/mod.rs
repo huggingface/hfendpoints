@@ -23,7 +23,7 @@ pub(crate) mod python {
         );
     }
 
-    /// Bind hfendpoints.openai.audio submodule into the exported Python wheel
+    /// Bind hfendpoints.http.audio submodule into the exported Python wheel
     pub fn bind<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
         let module = ImportablePyModuleBuilder::new(py, name)?
             .defaults()?
