@@ -1,0 +1,192 @@
+name: Hugging Face Inference Endpoint integration tests
+on:
+  merge_group:
+    types:
+      - checks_requested
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-build
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# Define global environment variables
+env:
+  HF_TOKEN: ${{ secrets.HUB_HFENDPOINTS_IMAGES_ORG_TOKEN }}
+
+jobs:
+  build_target_matrix:
+    outputs:
+      repositories: ${{ steps.extract.outputs.repositories }}
+
+    runs-on: ubuntu-latest
+    env:
+      HFENDPOINTS_ENDPOINT_REPOSITORIES: "whisper-vllm-gpu;"
+
+    steps:
+      # Extract the comma separated list of repository to individual HFENDPOINTS_ENDPOINT_REPOSITORY_<index>=<model_id>
+      - name: "Extract image repositories"
+        id: "extract"
+        run: |
+          IFS=';' read -r -a __repositories__ <<< "${HFENDPOINTS_ENDPOINT_REPOSITORIES}"
+          REPOSITORIES_JSON_ARRAY=$(jq -c -n '$ARGS.positional' --args "${__repositories__[@]}")
+          REPOSITORIES_JSON_OBJECT=$(jq -c -n --argjson repositories ${REPOSITORIES_JSON_ARRAY} -f <(echo '{"repository":$repositories}'))
+
+          echo "Executing integration tests on the following repositories: ${REPOSITORIES_JSON_ARRAY}" >> $GITHUB_STEP_SUMMARY
+          echo "repositories=${REPOSITORIES_JSON_OBJECT}" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    runs-on:
+      group: aws-general-8-plus
+    needs: build_target_matrix
+    strategy:
+      fail-fast: true
+      matrix: ${{ fromJson(needs.build_target_matrix.outputs.repositories) }}
+      max-parallel: 10
+
+    steps:
+      - name: "Setup context"
+        env:
+          COMMIT_ID: ${{ github.event.pull_request.head.sha || env.GITHUB_SHA }}
+        run: echo "COMMIT_ID=${COMMIT_ID}" >> "$GITHUB_ENV"
+
+      - name: "Setup Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Install hfjobs"
+        run: python3 -m pip install hfjobs huggingface_hub
+
+      - name: "Install hf endpoints CLI"
+        uses: actions/checkout@v4
+        with:
+          repository: huggingface/hf-cli
+          path: "./hfcli"
+          fetch-depth: '1'
+          ref: 'main'
+          token: ${{ secrets.HUGGINGFACE_CLI_TOKEN }}
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: "Generate lockfile for hf endpoints CLI"
+        run: cd ./hfcli && cargo generate-lockfile
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ./hfcli/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('./hfcli/**/Cargo.lock') }}
+
+      - name: "Build & install Hugging Face CLI"
+        run: |
+          cd ./hfcli && cargo build --release --all-features
+          echo "HF_CLI=./hfcli/target/release/hf" >> "$GITHUB_ENV"
+
+      - name: "Define global variables"
+        env:
+          ENDPOINT_REPO: ${{ matrix.repository }}
+          ENDPOINT_REPO_PATH: ${{ format('./repos/{0}', matrix.repository) }}
+        run: |
+          export ENDPOINT_REPO_HFJOBS_FOLDER_PATH=${ENDPOINT_REPO_PATH}/.hfjobs
+          export ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH=${ENDPOINT_REPO_HFJOBS_FOLDER_PATH}/deploy.json
+          echo "ENDPOINT_REPO=${ENDPOINT_REPO}" >> "$GITHUB_ENV"
+          echo "ENDPOINT_REPO_PATH=${ENDPOINT_REPO_PATH}" >> "$GITHUB_ENV"
+          echo "ENDPOINT_REPO_HFJOBS_FOLDER_PATH=${ENDPOINT_REPO_HFJOBS_FOLDER_PATH}" >> "$GITHUB_ENV"
+          echo "ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH=${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH}" >> "$GITHUB_ENV"
+
+      - name: "Fetch endpoint specs"
+        run: |
+          echo "Fetching repository .hfjobs content for ${ENDPOINT_REPO}"
+          huggingface-cli login --token ${HF_TOKEN}
+          huggingface-cli download hfendpoints-images/${ENDPOINT_REPO} --local-dir ${ENDPOINT_REPO_PATH}
+
+      - name: "Ensure endpoint has .hfjobs folder"
+        if: ${{ hashFiles(env.ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH) != '' }}
+        run: echo "Found .hfjobs folder"
+
+      - name: "Docker login"
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: "Extract metadata information"
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: huggingface/hfendpoints-sdk
+
+      - name: "Build SDK container"
+        id: build_container_sdk
+        uses: docker/build-push-action@v6
+        with:
+          push: false
+          tags: ${{ format('huggingface/hfendpoints-sdk:{0}', env.COMMIT_ID) }}
+          annotations: ${{ steps.metadata.outputs.annotations }}
+
+      - name: "Build endpoint container"
+        id: build_container_endpoint
+        env:
+          ENDPOINT_REPO_SHA: "latest"
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.ENDPOINT_REPO_PATH }}
+          push: true
+          tags: mfuntowicz/${{ env.ENDPOINT_REPO }}:${{ env.COMMIT_ID }}
+          build-args: |
+            SDK_VERSION=${{ env.COMMIT_ID }}
+
+      - name: "Deploy endpoint"
+        id: deploy_endpoint
+        run: |
+          INSTANCE_TYPE=$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.instance_type' )
+          INSTANCE_SIZE=$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.instance_size' )
+          MODEL=$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.model' )
+          ENDPOINT_DETAILS=$(${HF_CLI} endpoints create \
+            --wait \
+            --output json \
+            --provider aws \
+            --region us-east-1 \
+            --container custom \
+            --container-url ${{ format('mfuntowicz/{0}:{1}', env.ENDPOINT_REPO, env.COMMIT_ID) }} \
+            --model ${MODEL} \
+            --instance-type ${INSTANCE_TYPE} \
+            --instance-size ${INSTANCE_SIZE})
+          echo "ENDPOINT_NAME=`jq -r '.[].name' <<< ${ENDPOINT_DETAILS}`" >> "$GITHUB_ENV"
+          echo "ENDPOINT_URL=`jq -r '.[].url' <<< ${ENDPOINT_DETAILS}`" >> "$GITHUB_ENV"
+          echo "Successfully started endpoint ${ENDPOINT_NAME}"
+
+      - name: "Build test runner container from the image repo"
+        id: build_container_test_runner
+        if: ${{ steps.deploy_endpoint.outcome == 'success' }}
+        continue-on-error: true
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.ENDPOINT_REPO_PATH }}
+          file: ${{ format('{0}/Dockerfile', env.ENDPOINT_REPO_HFJOBS_FOLDER_PATH) }}
+          push: true
+          tags: ${{ format('mfuntowicz/{0}-test:{1}', env.ENDPOINT_REPO, env.COMMIT_ID) }}
+          build-args: |
+            ENDPOINT_URL=${{ env.ENDPOINT_URL }}
+
+      - name: "Run unittest with hfjobs"
+        if: ${{ steps.build_container_test_runner.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          MODEL=$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.model' )
+          echo "$(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.description' )" >> "$GITHUB_STEP_SUMMARY"
+          echo "Running $(cat ${ENDPOINT_REPO_HFJOBS_DEPLOY_CONF_PATH} | jq -r '.id' ) on ${HARDWARE}"
+          hfjobs run --timeout 10m --secret OPENAI_API_KEY=${{ env.HF_TOKEN }} ${{ format('mfuntowicz/{0}-test:{1}', env.ENDPOINT_REPO, env.COMMIT_ID) }}
+
+      - name: "Delete endpoint"
+        if: ${{ steps.deploy_endpoint.outcome == 'success' }}
+        run: ${HF_CLI} endpoints delete ${ENDPOINT_NAME}
+
