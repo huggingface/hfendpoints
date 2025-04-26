@@ -58,6 +58,7 @@ pub struct Segment {
     no_speech_prob: f32,
 }
 
+#[allow(unused)]
 #[derive(Default)]
 pub struct SegmentBuilder {
     id: Option<u16>,
@@ -72,6 +73,7 @@ pub struct SegmentBuilder {
     no_speech_prob: Option<f32>,
 }
 
+#[allow(unused)]
 impl SegmentBuilder {
     pub fn id(mut self, id: u16) -> Self {
         self.id = Some(id);
@@ -153,6 +155,7 @@ impl SegmentBuilder {
     }
 }
 
+#[allow(unused)]
 impl Segment {
     pub fn builder() -> SegmentBuilder {
         SegmentBuilder::default()
@@ -208,6 +211,7 @@ pub struct Done {
     // TODO: logprobs -> https://platform.openai.com/docs/api-reference/audio/transcript-text-done-event#audio/transcript-text-done-event-logprobs
 }
 
+#[allow(unused)]
 #[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
@@ -266,6 +270,7 @@ impl IntoResponse for TranscriptionResponse {
 /// Transcribes audio into the input language.
 #[derive(ToSchema)]
 #[cfg_attr(debug_assertions, derive(Debug))]
+#[allow(unused)]
 struct TranscriptionForm {
     /// The audio file object (not file name) to transcribe, in one of these formats: flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, or webm.
     #[schema(format = Binary)]
@@ -412,7 +417,7 @@ pub async fn transcribe(
 /// [OpenAi Platform compatible Transcription endpoint](https://platform.openai.com/docs/api-reference/audio/createTranscription)
 #[derive(Clone)]
 pub struct TranscriptionRouter(
-    pub UnboundedSender<(
+    pub  UnboundedSender<(
         (TranscriptionRequest, Context),
         UnboundedSender<Result<TranscriptionResponse, Error>>,
     )>,
@@ -422,14 +427,20 @@ impl From<TranscriptionRouter> for OpenApiRouter {
     fn from(value: TranscriptionRouter) -> Self {
         OpenApiRouter::new()
             .routes(routes!(transcribe))
-            .with_state(EndpointContext::<(TranscriptionRequest, Context), TranscriptionResponse>::new(value.0))
+            .with_state(EndpointContext::<
+                (TranscriptionRequest, Context),
+                TranscriptionResponse,
+            >::new(value.0))
             .layer(DefaultBodyLimit::max(200 * 1024 * 1024)) // 200Mb as OpenAI
     }
 }
 
 #[cfg(feature = "python")]
 pub(crate) mod python {
-    use crate::audio::transcription::{ResponseFormat, Segment, Transcription, TranscriptionRequest, TranscriptionResponse, VerboseTranscription};
+    use crate::audio::transcription::{
+        ResponseFormat, Segment, Transcription, TranscriptionRequest, TranscriptionResponse,
+        VerboseTranscription,
+    };
     use hfendpoints_binding_python::fill_view_from_readonly_data;
     use pyo3::ffi::Py_buffer;
     use pyo3::prelude::*;
@@ -448,7 +459,6 @@ pub(crate) mod python {
         #[pyo3(name = "VERBOSE_JSON")]
         VerboseJson = 3,
     }
-
 
     #[pymethods]
     impl Segment {
@@ -506,9 +516,15 @@ pub(crate) mod python {
     #[pymethods]
     impl TranscriptionRequest {
         #[instrument(skip(slf, buffer))]
-        pub unsafe fn __getbuffer__(slf: Bound<'_, Self>, buffer: *mut Py_buffer, flags: i32) -> PyResult<()> {
+        pub unsafe fn __getbuffer__(
+            slf: Bound<'_, Self>,
+            buffer: *mut Py_buffer,
+            flags: i32,
+        ) -> PyResult<()> {
             debug!("Acquiring a memoryview over audio data (flags={})", flags);
-            unsafe { fill_view_from_readonly_data(buffer, flags, &slf.borrow().file, slf.into_any()) }
+            unsafe {
+                fill_view_from_readonly_data(buffer, flags, &slf.borrow().file, slf.into_any())
+            }
         }
 
         #[instrument(skip_all)]
@@ -538,7 +554,7 @@ pub(crate) mod python {
             match self.response_format {
                 ResponseFormat::Json => Ok(TranscriptionResponseKind::Json),
                 ResponseFormat::Text => Ok(TranscriptionResponseKind::Text),
-                ResponseFormat::VerboseJson => Ok(TranscriptionResponseKind::VerboseJson)
+                ResponseFormat::VerboseJson => Ok(TranscriptionResponseKind::VerboseJson),
             }
         }
     }

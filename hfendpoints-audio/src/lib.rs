@@ -1,58 +1,95 @@
 mod io {
-    // use std::io::Cursor;
-    // use symphonia::core::audio::{RawSample, RawSampleBuffer, SignalSpec};
-    // use symphonia::core::codecs::{CodecParameters, DecoderOptions};
-    // use symphonia::core::errors::Result as SymphoniaResult;
-    // use symphonia::core::formats::FormatOptions;
-    // use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
-    // use symphonia::core::meta::MetadataOptions;
-    // use symphonia::core::probe::Hint;
-    // use symphonia::core::units::Time;
-    // use symphonia::default::{get_codecs, get_probe};
-    // use tracing::instrument;
-    //
-    // #[instrument(skip_all)]
-    // pub fn load_audio<T: RawSample>(wave: &[u8]) -> SymphoniaResult<(RawSampleBuffer<T>, Time, CodecParameters)> {
-    //     let codecs = get_codecs();
-    //     let probe = get_probe();
-    //
-    //     let cursor = Cursor::new(wave);
-    //     let stream = MediaSourceStream::new(Box::new(cursor), MediaSourceStreamOptions::default());
-    //
-    //     // Detect audio format
-    //     let hint = Hint::default();
-    //     let mut guess = probe.format(&hint, stream, &FormatOptions::default(), &MetadataOptions::default())?;
-    //
-    //     // Allocate audio decoder for the target audio format
-    //     let mut decoder = codecs.make(&guess.format, &DecoderOptions::default())?;
-    //     let codec_params = decoder.codec_params();
-    //
-    //     // Decode until the end
-    //     let duration = codec_params.time_base.unwrap().calc_time(codec_params.n_frames.unwrap());
-    //     let mut raw_audio_buffer = RawSampleBuffer::<T>::new(
-    //         duration.seconds + 1,
-    //         SignalSpec::new(codec_params.sample_rate.unwrap(), codec_params.channels.unwrap()),
-    //     );
-    //     loop {
-    //         let packet = guess.format.next_packet()?;
-    //         let decoded = decoder.decode(&packet)?;
-    //         decoded.convert::<T>(&mut raw_audio_buffer);
-    //     }
-    //
-    //     Ok((raw_audio_buffer, duration, codec_params.clone()))
-    // }
+    use std::io::{Error as IoError, ErrorKind as IoErrorKind};
+    use symphonia::core::audio::conv::FromSample;
+    use symphonia::core::audio::sample::{i24, u24, Sample};
+    use symphonia::core::audio::{Audio, AudioBuffer};
+    use symphonia::core::codecs::audio::AudioDecoderOptions;
+    use symphonia::core::codecs::CodecParameters;
+    use symphonia::core::errors::Result as SymphoniaResult;
+    use symphonia::core::formats::probe::Hint;
+    use symphonia::core::formats::{FormatOptions, TrackType};
+    use symphonia::core::io::{BufReader, MediaSourceStream, MediaSourceStreamOptions};
+    use symphonia::core::meta::MetadataOptions;
+    use symphonia::core::units::Time;
+    use symphonia::default::{get_codecs, get_probe};
+    use tracing::instrument;
+
+    #[instrument(skip_all)]
+    pub fn load_audio<T>(wave: &[u8]) -> SymphoniaResult<(Vec<f32>, Time, CodecParameters)>
+    where
+        T: Sample
+            + FromSample<u8>
+            + FromSample<u16>
+            + FromSample<u24>
+            + FromSample<u32>
+            + FromSample<i8>
+            + FromSample<i16>
+            + FromSample<i24>
+            + FromSample<i32>
+            + FromSample<f32>
+            + FromSample<f64>,
+    {
+        let codecs = get_codecs();
+        let probe = get_probe();
+
+        let raw_audio = Box::new(BufReader::new(wave));
+        let stream = MediaSourceStream::new(raw_audio, MediaSourceStreamOptions::default());
+
+        // Detect audio format
+        let hint = Hint::default();
+        let mut guess = probe.probe(
+            &hint,
+            stream,
+            FormatOptions::default(),
+            MetadataOptions::default(),
+        )?;
+
+        // Allocate audio decoder for the target audio format
+        let track = guess
+            .default_track(TrackType::Audio)
+            .ok_or(IoError::new(IoErrorKind::InvalidData, "Failed to decode audio as no track was discovered while skimming through the provided data."))?;
+
+        let mut decoder = codecs.make_audio_decoder(
+            &track.codec_params.as_ref().unwrap().audio().unwrap(),
+            &AudioDecoderOptions::default(),
+        )?;
+
+        // let mut raw_audio_buffer = RawSampleBuffer::<T>::new(
+        //     duration.seconds + 1,
+        //
+        //     SignalSpec::new(
+        //         codec_params.sample_rate.unwrap(),
+        //         codec_params.channels.unwrap(),
+        //     ),
+        // );
+
+        track.
+
+        loop {
+            let packet = guess.format.next_packet()?;
+            let decoded = decoder.decode(&packet)?;
+
+            let mut converted = AudioBuffer::<T>::new(decoded.spec().clone(), decoded.capacity());
+
+            decoded.copy_to(&mut converted);
+            converted.copy_to_vec_interleaved(&mut out)
+        }
+
+        Ok((raw_audio_buffer, duration, codec_params.clone()))
+    }
 
     #[cfg(feature = "python")]
     pub(crate) mod python {
+        use crate::io::load_audio;
         use hfendpoints_binding_python::ImportablePyModuleBuilder;
+        use pyo3::exceptions::PyIOError;
         use pyo3::prelude::*;
-        use symphonia::core::audio::RawSampleBuffer;
         use symphonia::core::codecs::CodecParameters;
         use symphonia::core::units::Time;
 
         #[pyclass(name = "NativeAudioBuffer")]
         pub struct PyAudioBuffer {
-            pcm: RawSampleBuffer<f32>,
+            pcm: Vec<f32>,
             duration: Time,
             codec: CodecParameters,
         }
@@ -66,26 +103,45 @@ mod io {
 
             #[getter]
             fn sample_rate(&self) -> u32 {
-                self.codec.sample_rate.unwrap_or(0)
+                self.codec
+                    .audio()
+                    .map(|audio| audio.sample_rate.unwrap_or(0))
+                    .unwrap_or(0)
             }
 
             #[getter]
             fn channels(&self) -> usize {
-                self.codec.channels.map(|channels| channels.count()).unwrap_or(0)
+                self.codec
+                    .audio()
+                    .map(|audio| {
+                        audio
+                            .channels
+                            .as_ref()
+                            .map(|channel| channel.count())
+                            .unwrap_or(0)
+                    })
+                    .unwrap_or(0)
             }
 
             fn resample(&mut self) {}
         }
 
-        // #[pyfunction(name = "load_audio_to_pcm")]
-        // fn py_load_audio(content: &[u8]) -> PyResult<PyAudioBuffer> {
-        //     let (pcm, duration, codec) = load_audio::<f32>(content)?;
-        //     Ok(PyAudioBuffer { pcm, duration, codec })
-        // }
+        #[pyfunction(name = "load_audio_to_pcm")]
+        fn py_load_audio(content: &[u8]) -> PyResult<PyAudioBuffer> {
+            let (pcm, duration, codec) = load_audio::<f32>(content).map_err(|err| {
+                PyIOError::new_err(format!("Failed to decode audio to PCM: {err}"))
+            })?;
+            Ok(PyAudioBuffer {
+                pcm,
+                duration,
+                codec,
+            })
+        }
 
         pub fn bind<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
             let module = ImportablePyModuleBuilder::new(py, name)?
-                .add_class::<PyAudioBuffer>()?.finish();
+                .add_class::<PyAudioBuffer>()?
+                .finish();
 
             // module.add_function(wrap_pyfunction!(py_load_audio)?)?;
             Ok(module)

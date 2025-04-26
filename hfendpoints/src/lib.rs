@@ -2,7 +2,7 @@
 mod python {
     use hfendpoints_audio as audio;
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
-    use hfendpoints_openai as openai;
+    use hfendpoints_http as http;
     use pyo3::prelude::*;
 
     pub const __VERSION__: &str = env!("CARGO_PKG_VERSION");
@@ -17,7 +17,7 @@ mod python {
         let pymodule_hfendpoints = ImportablePyModuleBuilder::from(m)
             .defaults()?
             .add_submodule(&audio::python::bind(py, &format!("{name}.audio"))?)?
-            .add_submodule(&openai::python::bind(py, &format!("{name}.openai"))?)?
+            .add_submodule(&http::python::bind(py, &format!("{name}.http"))?)?
             .finish();
 
         pymodule_hfendpoints.add("__version__", __VERSION__)?;

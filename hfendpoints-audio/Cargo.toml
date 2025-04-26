@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
-symphonia = { version = "0.5.4", features = ["all-codecs", "opt-simd"] }
+symphonia = { git = "https://github.com/pdeljanov/Symphonia", branch = "dev-0.6", features = ["all-codecs", "opt-simd"] }
 tracing = { workspace = true }
 pyo3 = { workspace = true, optional = true }
 

@@ -3,6 +3,7 @@ use crate::headers::RequestId;
 use pyo3::prelude::*;
 
 /// Holds the context in which a request is being executed
+#[allow(unused)]
 #[cfg_attr(feature = "python", pyclass)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone)]
