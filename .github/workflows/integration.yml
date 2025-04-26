@@ -1,5 +1,6 @@
 name: Hugging Face Inference Endpoint integration tests
 on:
+  pull_request:
   merge_group:
     types:
       - checks_requested
