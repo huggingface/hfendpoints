@@ -47,7 +47,7 @@ async fn health() -> StatusCode {
 struct ApiDoc;
 
 #[instrument(skip(task_router))]
-pub async fn serve_openai<A, R>(interface: A, task_router: R) -> OpenAiResult<()>
+pub async fn serve_http<A, R>(interface: A, task_router: R) -> OpenAiResult<()>
 where
     A: ToSocketAddrs + Debug,
     R: Into<OpenApiRouter>,
@@ -160,7 +160,7 @@ pub mod python {
 
     macro_rules! impl_pyendpoint {
         ($name: literal, $pyname: ident, $handler: ident, $router: ident) => {
-            use crate::{__path_health, ApiDoc, Context, health, serve_openai};
+            use crate::{__path_health, ApiDoc, Context, health, serve_http};
             use hfendpoints_core::{Endpoint, wait_for_requests};
             use pyo3::exceptions::PyRuntimeError;
             use pyo3::prelude::*;
@@ -188,8 +188,12 @@ pub mod python {
                     let _ = pyo3_async_runtimes::tokio::get_runtime()
                         .spawn(wait_for_requests(receiver, handler));
 
-                    info!("Starting endpoint at {}:{}", &inet_address.0, &inet_address.1);
-                    pyo3_async_runtimes::tokio::get_runtime().spawn(serve_openai(inet_address, router))
+                    info!(
+                        "Starting endpoint at {}:{}",
+                        &inet_address.0, &inet_address.1
+                    );
+                    pyo3_async_runtimes::tokio::get_runtime()
+                        .spawn(serve_http(inet_address, router))
                         .await
                         .inspect_err(|err| {
                             info!("Caught error while serving endpoint: {err}");
@@ -235,9 +239,12 @@ pub mod python {
             .await?;
 
         Python::with_gil(|py| {
-            let coro = endpoint.bind(py).call_method1("_serve_", (interface, port))?;
+            let coro = endpoint
+                .bind(py)
+                .call_method1("_serve_", (interface, port))?;
             pyo3_async_runtimes::into_future_with_locals(&locals, coro)
-        })?.await?;
+        })?
+        .await?;
         Ok(())
     }
 
