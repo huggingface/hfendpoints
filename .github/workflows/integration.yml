@@ -1,9 +1,7 @@
 name: Hugging Face Inference Endpoint integration tests
 on:
-  pull_request:
   merge_group:
-    types:
-      - checks_requested
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-build
