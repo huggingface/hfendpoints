@@ -5,13 +5,17 @@ pub const AUDIO_DESC: &str = "Learn how to turn audio into text or text into aud
 
 #[cfg(feature = "python")]
 pub(crate) mod python {
-    use crate::audio::transcription::python::TranscriptionResponseKind;
-    use crate::audio::transcription::{Segment, Transcription, TranscriptionRequest, TranscriptionResponse, VerboseTranscription};
+    use crate::openai::audio::transcription::python::TranscriptionResponseKind;
+    use crate::openai::audio::transcription::{
+        Segment, Transcription, TranscriptionRequest, TranscriptionResponse, VerboseTranscription,
+    };
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
     use pyo3::prelude::*;
 
     mod transcriptions {
-        use crate::audio::transcription::{TranscriptionRequest, TranscriptionResponse, TranscriptionRouter};
+        use crate::openai::audio::transcription::{
+            TranscriptionRequest, TranscriptionResponse, TranscriptionRouter,
+        };
         use crate::python::{impl_pyendpoint, impl_pyhandler};
 
         impl_pyhandler!(TranscriptionRequest, TranscriptionResponse);

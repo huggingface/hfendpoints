@@ -1,6 +1,6 @@
-use crate::audio::{AUDIO_DESC, AUDIO_TAG};
 use axum::http::{HeaderName, StatusCode};
 use error::OpenAiError;
+use openai::audio::{AUDIO_DESC, AUDIO_TAG};
 use std::fmt::Debug;
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tower::ServiceBuilder;
@@ -12,10 +12,12 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 use utoipa_scalar::{Scalar, Servable};
 
-pub(crate) mod audio;
 mod context;
 mod error;
 mod headers;
+mod huggingface;
+mod openai;
+
 pub use context::Context;
 
 type OpenAiResult<T> = Result<T, OpenAiError>;
@@ -79,7 +81,6 @@ where
 pub mod python {
     use hfendpoints_binding_python::tokio::create_multithreaded_runtime;
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
-    use hfendpoints_core::Endpoint;
     use pyo3::prelude::*;
     use pyo3::prepare_freethreaded_python;
     use pyo3_async_runtimes::tokio::init;
@@ -160,19 +161,16 @@ pub mod python {
 
     macro_rules! impl_pyendpoint {
         ($name: literal, $pyname: ident, $handler: ident, $router: ident) => {
-            use crate::{__path_health, ApiDoc, Context, health, serve_http};
+            use crate::{Context, serve_http};
             use hfendpoints_core::{Endpoint, wait_for_requests};
             use pyo3::exceptions::PyRuntimeError;
             use pyo3::prelude::*;
-            use pyo3::types::PyNone;
+
             use std::sync::Arc;
-            use tokio::net::TcpListener;
+
             use tokio::sync::mpsc::unbounded_channel;
-            use tokio::task::spawn;
+
             use tracing::error;
-            use utoipa::OpenApi;
-            use utoipa_axum::{router::OpenApiRouter, routes};
-            use utoipa_scalar::{Scalar, Servable};
 
             #[pyclass(name = $name)]
             pub(crate) struct $pyname(Arc<$handler>);
@@ -276,7 +274,10 @@ pub mod python {
         let module = ImportablePyModuleBuilder::new(py, name)?
             .defaults()?
             .add_class::<Context>()?
-            .add_submodule(&crate::audio::python::bind(py, &format!("{name}.audio"))?)?
+            .add_submodule(&crate::openai::audio::python::bind(
+                py,
+                &format!("{name}.audio"),
+            )?)?
             .finish();
 
         module.add_function(wrap_pyfunction!(run, &module)?)?;

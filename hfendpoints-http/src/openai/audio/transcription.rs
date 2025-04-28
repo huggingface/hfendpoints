@@ -1,6 +1,6 @@
-use crate::audio::AUDIO_TAG;
 use crate::context::Context;
 use crate::headers::RequestId;
+use crate::openai::audio::AUDIO_TAG;
 use crate::{OpenAiError, OpenAiResult};
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Multipart, State};
@@ -437,7 +437,7 @@ impl From<TranscriptionRouter> for OpenApiRouter {
 
 #[cfg(feature = "python")]
 pub(crate) mod python {
-    use crate::audio::transcription::{
+    use crate::openai::audio::transcription::{
         ResponseFormat, Segment, Transcription, TranscriptionRequest, TranscriptionResponse,
         VerboseTranscription,
     };
@@ -580,7 +580,7 @@ pub(crate) mod python {
 
 #[cfg(test)]
 mod tests {
-    use crate::audio::transcription::{Delta, Done, Segment, StreamEvent};
+    use crate::openai::audio::transcription::{Delta, Done, Segment, StreamEvent};
 
     #[test]
     fn serialize_stream_event_delta() {
