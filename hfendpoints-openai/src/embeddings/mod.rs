@@ -19,7 +19,6 @@ use utoipa_axum::routes;
 pub const EMBEDDINGS_TAG: &str = "Embeddings";
 pub const EMBEDDINGS_DESC: &str = "Get a vector representation of a given input that can be easily consumed by machine learning models and algorithms.";
 
-
 #[cfg_attr(feature = "python", pyclass)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Copy, Clone, Serialize, ToSchema)]
@@ -37,11 +36,13 @@ pub struct Embedding {
     embedding: Vec<f32>,
 }
 
-#[cfg_attr(feature = "python", pymethods)]
 impl Embedding {
-    #[cfg_attr(feature = "python", new)]
     pub fn new(index: usize, embedding: Vec<f32>) -> Self {
-        Self { object: "embedding", index, embedding }
+        Self {
+            object: "embedding",
+            index,
+            embedding,
+        }
     }
 }
 
@@ -63,11 +64,14 @@ pub struct EmbeddingResponse {
     usage: Usage,
 }
 
-#[cfg_attr(feature = "python", pymethods)]
 impl EmbeddingResponse {
-    #[cfg_attr(feature = "python", new)]
     pub fn new(data: Vec<Embedding>, model: String, usage: Usage) -> Self {
-        Self { object: "list", data, model, usage }
+        Self {
+            object: "list",
+            data,
+            model,
+            usage,
+        }
     }
 }
 
@@ -79,6 +83,7 @@ impl IntoResponse for EmbeddingResponse {
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Deserialize, ToSchema)]
+#[serde(untagged)]
 pub enum EmbeddingInput {
     Text(String),
     Tokens(Vec<u32>),
@@ -86,6 +91,7 @@ pub enum EmbeddingInput {
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Deserialize, ToSchema)]
+#[serde(untagged)]
 pub enum MaybeBatched<T>
 where
     T: Clone + Sized,
@@ -136,7 +142,7 @@ pub async fn embed(
 /// [OpenAi Platform compatible Transcription endpoint](https://platform.openai.com/docs/api-reference/audio/createTranscription)
 #[derive(Clone)]
 pub struct EmbeddingRouter(
-    pub UnboundedSender<(
+    pub  UnboundedSender<(
         (EmbeddingRequest, Context),
         UnboundedSender<Result<EmbeddingResponse, Error>>,
     )>,
@@ -146,16 +152,34 @@ impl From<EmbeddingRouter> for OpenApiRouter {
     fn from(value: EmbeddingRouter) -> Self {
         OpenApiRouter::new()
             .routes(routes!(embed))
-            .with_state(EndpointContext::<(EmbeddingRequest, Context), EmbeddingResponse>::new(value.0))
+            .with_state(EndpointContext::<
+                (EmbeddingRequest, Context),
+                EmbeddingResponse,
+            >::new(value.0))
     }
 }
 
 #[cfg(feature = "python")]
 pub(crate) mod python {
-    use crate::embeddings::{EmbeddingInput, EmbeddingRequest, EmbeddingResponse, EmbeddingRouter, EncodingFormat, MaybeBatched};
+    use crate::embeddings::{
+        Embedding, EmbeddingInput, EmbeddingRequest, EmbeddingResponse, EmbeddingRouter,
+        EncodingFormat, MaybeBatched, Usage,
+    };
     use crate::python::{impl_pyendpoint, impl_pyhandler};
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
     use pyo3::types::{PyList, PyString};
+
+    #[pymethods]
+    impl Embedding {
+        #[new]
+        fn py_new(index: u32) -> Self {
+            Self {
+                object: "embedding",
+                index: index as usize,
+                embedding: vec![],
+            }
+        }
+    }
 
     #[pymethods]
     impl EmbeddingRequest {
@@ -163,38 +187,53 @@ pub(crate) mod python {
         pub fn encoding_format(&self) -> EncodingFormat {
             self.encoding_format
         }
-        //
-        // pub fn input(&self, py: Python<'_>) -> PyResult<PyObject> {
-        //     let pyobj = match &self.input {
-        //         MaybeBatched::Single(item) => match item {
-        //             EmbeddingInput::Text(text) => text.into_py(py),
-        //             EmbeddingInput::Tokens(tokens) => tokens.into_py(py),
-        //         }
-        //         MaybeBatched::Batch(items) => {
-        //             items.into_py(py)
-        //         }
-        //     };
-        //
-        //     Ok(pyobj)
-        // }
+
+        #[getter]
+        pub fn input(&self, py: Python<'_>) -> PyResult<PyObject> {
+            let pyobj = match &self.input {
+                MaybeBatched::Single(item) => match item {
+                    EmbeddingInput::Text(text) => text.to_object(py),
+                    EmbeddingInput::Tokens(tokens) => tokens.to_object(py),
+                },
+                MaybeBatched::Batch(items) => panic!("not supported yet"),
+            };
+
+            Ok(pyobj)
+        }
     }
 
+    #[pymethods]
+    impl EmbeddingResponse {
+        fn empty(index: usize) -> Self {
+            Self {
+                object: "list",
+                data: vec![],
+                model: "".to_string(),
+                usage: Usage {
+                    prompt_tokens: 0,
+                    total_tokens: 0,
+                },
+            }
+        }
+    }
 
     impl_pyhandler!(EmbeddingRequest, EmbeddingResponse);
     impl_pyendpoint!(
-        "EmbeddingHandler",
-        PyEmbeddingHandler,
+        "EmbeddingEndpoint",
+        PyEmbeddingEndpoint,
         PyHandler,
         EmbeddingRouter
     );
 
-    // Bind hfendpoints.openai.audio submodule into the exported Python wheel
+    // Bind hfendpoints.openai.embeddings submodule into the exported Python wheel
     pub fn bind<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
         let module = ImportablePyModuleBuilder::new(py, name)?
             .defaults()?
+            .add_class::<Embedding>()?
             .add_class::<EncodingFormat>()?
             .add_class::<EmbeddingRequest>()?
             .add_class::<EmbeddingResponse>()?
+            .add_class::<PyEmbeddingEndpoint>()?
             .finish();
 
         Ok(module)

@@ -14,9 +14,9 @@ use utoipa_scalar::{Scalar, Servable};
 
 pub(crate) mod audio;
 mod context;
+pub(crate) mod embeddings;
 mod error;
 mod headers;
-mod embeddings;
 
 pub use context::Context;
 
@@ -189,8 +189,12 @@ pub mod python {
                     let _ = pyo3_async_runtimes::tokio::get_runtime()
                         .spawn(wait_for_requests(receiver, handler));
 
-                    info!("Starting endpoint at {}:{}", &inet_address.0, &inet_address.1);
-                    pyo3_async_runtimes::tokio::get_runtime().spawn(serve_openai(inet_address, router))
+                    info!(
+                        "Starting endpoint at {}:{}",
+                        &inet_address.0, &inet_address.1
+                    );
+                    pyo3_async_runtimes::tokio::get_runtime()
+                        .spawn(serve_openai(inet_address, router))
                         .await
                         .inspect_err(|err| {
                             info!("Caught error while serving endpoint: {err}");
@@ -236,9 +240,12 @@ pub mod python {
             .await?;
 
         Python::with_gil(|py| {
-            let coro = endpoint.bind(py).call_method1("_serve_", (interface, port))?;
+            let coro = endpoint
+                .bind(py)
+                .call_method1("_serve_", (interface, port))?;
             pyo3_async_runtimes::into_future_with_locals(&locals, coro)
-        })?.await?;
+        })?
+        .await?;
         Ok(())
     }
 
@@ -271,6 +278,10 @@ pub mod python {
             .defaults()?
             .add_class::<Context>()?
             .add_submodule(&crate::audio::python::bind(py, &format!("{name}.audio"))?)?
+            .add_submodule(&crate::embeddings::python::bind(
+                py,
+                &format!("{name}.embeddings"),
+            )?)?
             .finish();
 
         module.add_function(wrap_pyfunction!(run, &module)?)?;
