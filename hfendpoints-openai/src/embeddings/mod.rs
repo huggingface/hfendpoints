@@ -19,6 +19,9 @@ use utoipa_axum::routes;
 pub const EMBEDDINGS_TAG: &str = "Embeddings";
 pub const EMBEDDINGS_DESC: &str = "Get a vector representation of a given input that can be easily consumed by machine learning models and algorithms.";
 
+const EMBEDDING_OBJECT_ID: &'static str = "embedding";
+const LIST_OBJECT_ID: &'static str = "list";
+
 #[cfg_attr(feature = "python", pyclass)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Copy, Clone, Serialize, ToSchema)]
@@ -39,7 +42,7 @@ pub struct Embedding {
 impl Embedding {
     pub fn new(index: usize, embedding: Vec<f32>) -> Self {
         Self {
-            object: "embedding",
+            object: EMBEDDING_OBJECT_ID,
             index,
             embedding,
         }
@@ -49,6 +52,7 @@ impl Embedding {
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(feature = "python", pyclass(frozen, eq, eq_int))]
 #[derive(Clone, Copy, Deserialize, Serialize, ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
 pub enum EncodingFormat {
     Float,
     Base64,
@@ -67,7 +71,7 @@ pub struct EmbeddingResponse {
 impl EmbeddingResponse {
     pub fn new(data: Vec<Embedding>, model: String, usage: Usage) -> Self {
         Self {
-            object: "list",
+            object: LIST_OBJECT_ID,
             data,
             model,
             usage,
@@ -76,8 +80,9 @@ impl EmbeddingResponse {
 }
 
 impl IntoResponse for EmbeddingResponse {
+    #[inline]
     fn into_response(self) -> Response {
-        todo!()
+        Json::from(self).into_response()
     }
 }
 
@@ -163,11 +168,43 @@ impl From<EmbeddingRouter> for OpenApiRouter {
 pub(crate) mod python {
     use crate::embeddings::{
         Embedding, EmbeddingInput, EmbeddingRequest, EmbeddingResponse, EmbeddingRouter,
-        EncodingFormat, MaybeBatched, Usage,
+        EncodingFormat, MaybeBatched, Usage, EMBEDDING_OBJECT_ID,
     };
     use crate::python::{impl_pyendpoint, impl_pyhandler};
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
-    use pyo3::types::{PyList, PyString};
+
+    #[pymethods]
+    impl Usage {
+        #[new]
+        fn py_new(prompt_tokens: usize, total_tokens: usize) -> Self {
+            Self {
+                prompt_tokens,
+                total_tokens,
+            }
+        }
+
+        #[getter]
+        fn prompt_tokens(&self) -> usize {
+            self.prompt_tokens
+        }
+
+        #[getter]
+        fn total_tokens(&self) -> usize {
+            self.total_tokens
+        }
+    }
+
+    #[pymethods]
+    impl Embedding {
+        #[new]
+        fn py_new(index: u32) -> Self {
+            Self {
+                object: EMBEDDING_OBJECT_ID,
+                index: index as usize,
+                embedding: vec![],
+            }
+        }
+    }
 
     #[pymethods]
     impl Embedding {
@@ -189,6 +226,14 @@ pub(crate) mod python {
         }
 
         #[getter]
+        pub fn is_batched(&self) -> bool {
+            match self.input {
+                MaybeBatched::Single(_) => false,
+                MaybeBatched::Batch(_) => true,
+            }
+        }
+
+        #[getter]
         pub fn input(&self, py: Python<'_>) -> PyResult<PyObject> {
             let pyobj = match &self.input {
                 MaybeBatched::Single(item) => match item {
@@ -204,11 +249,12 @@ pub(crate) mod python {
 
     #[pymethods]
     impl EmbeddingResponse {
-        fn empty(index: usize) -> Self {
+        #[new]
+        fn py_new(model: String) -> Self {
             Self {
-                object: "list",
+                object: EMBEDDING_OBJECT_ID,
                 data: vec![],
-                model: "".to_string(),
+                model,
                 usage: Usage {
                     prompt_tokens: 0,
                     total_tokens: 0,
@@ -234,6 +280,7 @@ pub(crate) mod python {
             .add_class::<EmbeddingRequest>()?
             .add_class::<EmbeddingResponse>()?
             .add_class::<PyEmbeddingEndpoint>()?
+            .add_class::<Usage>()?
             .finish();
 
         Ok(module)

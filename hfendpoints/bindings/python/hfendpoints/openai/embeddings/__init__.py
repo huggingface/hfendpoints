@@ -1,1 +1,1 @@
-from ..._hfendpoints.openai.embeddings import EmbeddingRequest, EmbeddingResponse, EmbeddingEndpoint
+from ..._hfendpoints.openai.embeddings import EmbeddingRequest, EmbeddingResponse, EmbeddingEndpoint, Usage
