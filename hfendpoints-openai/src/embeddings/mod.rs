@@ -4,9 +4,9 @@ use pyo3::prelude::*;
 use crate::error::OpenAiError;
 use crate::headers::RequestId;
 use crate::{Context, OpenAiResult};
+use axum::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use axum_extra::TypedHeader;
 use hfendpoints_core::{EndpointContext, Error};
 use serde::{Deserialize, Serialize};
@@ -167,8 +167,8 @@ impl From<EmbeddingRouter> for OpenApiRouter {
 #[cfg(feature = "python")]
 pub(crate) mod python {
     use crate::embeddings::{
-        Embedding, EmbeddingInput, EmbeddingRequest, EmbeddingResponse, EmbeddingRouter,
-        EncodingFormat, MaybeBatched, Usage, EMBEDDING_OBJECT_ID,
+        EMBEDDING_OBJECT_ID, Embedding, EmbeddingInput, EmbeddingRequest, EmbeddingResponse,
+        EmbeddingRouter, EncodingFormat, MaybeBatched, Usage,
     };
     use crate::python::{impl_pyendpoint, impl_pyhandler};
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
@@ -200,18 +200,6 @@ pub(crate) mod python {
         fn py_new(index: u32) -> Self {
             Self {
                 object: EMBEDDING_OBJECT_ID,
-                index: index as usize,
-                embedding: vec![],
-            }
-        }
-    }
-
-    #[pymethods]
-    impl Embedding {
-        #[new]
-        fn py_new(index: u32) -> Self {
-            Self {
-                object: "embedding",
                 index: index as usize,
                 embedding: vec![],
             }
