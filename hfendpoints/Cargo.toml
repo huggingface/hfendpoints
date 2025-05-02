@@ -1,6 +1,6 @@
 [package]
 name = "hfendpoints"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [lib]
@@ -8,7 +8,7 @@ name = "hfendpoints"
 crate-type = ["cdylib"]
 
 [dependencies]
-hfendpoints-audio = { path = "../hfendpoints-audio", optional = true}
+hfendpoints-audio = { path = "../hfendpoints-audio", optional = true }
 hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
 hfendpoints-core = { path = "../hfendpoints-core", optional = true }
 hfendpoints-openai = { path = "../hfendpoints-openai" }
