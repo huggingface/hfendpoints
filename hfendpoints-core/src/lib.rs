@@ -17,4 +17,7 @@ pub enum Error {
     #[cfg(feature = "python")]
     #[error("Caught error while executing Python code: {0}")]
     PythonError(#[from] PyErr),
+
+    #[error("{0}")]
+    TestError(&'static str),
 }

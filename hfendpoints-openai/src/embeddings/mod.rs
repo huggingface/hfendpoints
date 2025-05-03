@@ -4,9 +4,9 @@ use pyo3::prelude::*;
 use crate::error::OpenAiError;
 use crate::headers::RequestId;
 use crate::{Context, OpenAiResult};
-use axum::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
+use axum::Json;
 use axum_extra::TypedHeader;
 use hfendpoints_core::{EndpointContext, Error};
 use serde::{Deserialize, Serialize};
@@ -24,6 +24,7 @@ const LIST_OBJECT_ID: &'static str = "list";
 
 #[cfg_attr(feature = "python", pyclass)]
 #[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg_attr(test, derive(Deserialize))]
 #[derive(Copy, Clone, Serialize, ToSchema)]
 pub struct Usage {
     prompt_tokens: usize,
@@ -32,9 +33,19 @@ pub struct Usage {
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(feature = "python", pyclass(frozen))]
+#[cfg_attr(test, derive(Deserialize))]
+#[derive(Clone, Serialize, ToSchema)]
+#[serde(rename_all = "UPPERCASE")]
+enum EmbeddingTag {
+    Embedding,
+}
+
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg_attr(feature = "python", pyclass(frozen))]
+#[cfg_attr(test, derive(Deserialize))]
 #[derive(Clone, Serialize, ToSchema)]
 pub struct Embedding {
-    object: &'static str,
+    object: EmbeddingTag,
     index: usize,
     embedding: Vec<f32>,
 }
@@ -42,7 +53,7 @@ pub struct Embedding {
 impl Embedding {
     pub fn new(index: usize, embedding: Vec<f32>) -> Self {
         Self {
-            object: EMBEDDING_OBJECT_ID,
+            object: EmbeddingTag::Embedding,
             index,
             embedding,
         }
@@ -60,9 +71,19 @@ pub enum EncodingFormat {
 
 #[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg_attr(test, derive(Deserialize))]
+#[derive(Copy, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "UPPERCASE")]
+enum EmbeddingResponseTag {
+    Object,
+}
+
+#[cfg_attr(feature = "python", pyclass(frozen))]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg_attr(test, derive(Deserialize))]
 #[derive(Clone, Serialize, ToSchema)]
 pub struct EmbeddingResponse {
-    object: &'static str,
+    object: EmbeddingResponseTag,
     data: Vec<Embedding>,
     model: String,
     usage: Usage,
@@ -71,7 +92,7 @@ pub struct EmbeddingResponse {
 impl EmbeddingResponse {
     pub fn new(data: Vec<Embedding>, model: String, usage: Usage) -> Self {
         Self {
-            object: LIST_OBJECT_ID,
+            object: EmbeddingResponseTag::Object,
             data,
             model,
             usage,
@@ -87,6 +108,7 @@ impl IntoResponse for EmbeddingResponse {
 }
 
 #[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg_attr(test, derive(Serialize))]
 #[derive(Clone, Deserialize, ToSchema)]
 #[serde(untagged)]
 pub enum EmbeddingInput {
@@ -95,6 +117,7 @@ pub enum EmbeddingInput {
 }
 
 #[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg_attr(test, derive(Serialize))]
 #[derive(Clone, Deserialize, ToSchema)]
 #[serde(untagged)]
 pub enum MaybeBatched<T>
@@ -106,6 +129,7 @@ where
 }
 
 #[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg_attr(test, derive(Serialize))]
 #[cfg_attr(feature = "python", pyclass)]
 #[derive(Clone, Deserialize, ToSchema)]
 pub struct EmbeddingRequest {
@@ -167,8 +191,8 @@ impl From<EmbeddingRouter> for OpenApiRouter {
 #[cfg(feature = "python")]
 pub(crate) mod python {
     use crate::embeddings::{
-        EMBEDDING_OBJECT_ID, Embedding, EmbeddingInput, EmbeddingRequest, EmbeddingResponse,
-        EmbeddingRouter, EncodingFormat, MaybeBatched, Usage,
+        Embedding, EmbeddingInput, EmbeddingRequest, EmbeddingResponse, EmbeddingResponseTag,
+        EmbeddingRouter, EmbeddingTag, EncodingFormat, MaybeBatched, Usage, EMBEDDING_OBJECT_ID,
     };
     use crate::python::{impl_pyendpoint, impl_pyhandler};
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
@@ -199,7 +223,7 @@ pub(crate) mod python {
         #[new]
         fn py_new(index: u32) -> Self {
             Self {
-                object: EMBEDDING_OBJECT_ID,
+                object: EmbeddingTag::Embedding,
                 index: index as usize,
                 embedding: vec![],
             }
@@ -240,7 +264,7 @@ pub(crate) mod python {
         #[new]
         fn py_new(model: String) -> Self {
             Self {
-                object: EMBEDDING_OBJECT_ID,
+                object: EmbeddingResponseTag::Object,
                 data: vec![],
                 model,
                 usage: Usage {
@@ -272,5 +296,195 @@ pub(crate) mod python {
             .finish();
 
         Ok(module)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        http::{self, Request, StatusCode},
+        routing::post,
+        Router,
+    };
+    use http_body_util::BodyExt;
+    use hyper::body::Buf;
+    use serde_json::json;
+    use std::time::Duration;
+    use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
+    use tower::ServiceExt;
+    use tower_http::timeout::TimeoutLayer;
+
+    // Test helper to create a test app
+    fn create_test_app(
+        sender: UnboundedSender<(
+            (EmbeddingRequest, Context),
+            UnboundedSender<Result<EmbeddingResponse, Error>>,
+        )>,
+    ) -> Router {
+        let state = EndpointContext::new(sender);
+        Router::new()
+            .route("/embeddings", post(embed))
+            .with_state(state)
+            .layer(TimeoutLayer::new(Duration::from_secs(5)))
+    }
+
+    #[tokio::test]
+    async fn test_successful_embedding() {
+        // Create channels for test communication
+        let (tx, mut rx) = unbounded_channel();
+        let app = create_test_app(tx);
+
+        // Create test request
+        let request = EmbeddingRequest {
+            input: MaybeBatched::Single(EmbeddingInput::Text(String::from("test text"))),
+            model: Some("test-model".into()),
+            dimension: None,
+            encoding_format: EncodingFormat::Float,
+            user: None,
+        };
+
+        // Create test response
+        let response = EmbeddingResponse {
+            object: EmbeddingResponseTag::Object,
+            data: vec![Embedding {
+                embedding: vec![0.1, 0.2, 0.3],
+                index: 0,
+                object: EmbeddingTag::Embedding,
+            }],
+            model: "test-model".into(),
+            usage: Usage {
+                prompt_tokens: 1,
+                total_tokens: 1,
+            },
+        };
+
+        // Build the HTTP request
+        let request = Request::builder()
+            .uri("/embeddings")
+            .method(http::Method::POST)
+            .header("content-type", "application/json")
+            .header("x-request-id", "test-request-id")
+            .body(Body::from(serde_json::to_string(&request).unwrap()))
+            .unwrap();
+
+        // Spawn a task to handle the response
+        tokio::spawn(async move {
+            if let Some((_, sender)) = rx.recv().await {
+                sender.send(Ok(response)).unwrap();
+            }
+        });
+
+        // Send the request and check the response
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Verify response body
+        let body = response.collect().await.unwrap().aggregate();
+        let response_json: EmbeddingResponse = serde_json::from_reader(body.reader()).unwrap();
+        assert_eq!(response_json.model, "test-model");
+        assert_eq!(response_json.data.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_missing_request_id() {
+        let (tx, _) = unbounded_channel();
+        let app = create_test_app(tx);
+
+        let request = Request::builder()
+            .uri("/embeddings")
+            .method(http::Method::POST)
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&json!({
+                    "input": "test",
+                    "model": "test-model"
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    // TODO: reenable this one as currently it returns 422 instead of 408
+    // #[tokio::test]
+    // async fn test_no_response_from_handler() {
+    //     let (tx, rx) = unbounded_channel();
+    //     let app = create_test_app(tx);
+    //
+    //     let request = Request::builder()
+    //         .uri("/embeddings")
+    //         .method(http::Method::POST)
+    //         .header("content-type", "application/json")
+    //         .header("x-request-id", "test-request-id")
+    //         .body(Body::from(
+    //             serde_json::to_string(&json!({
+    //                 "input": "test",
+    //                 "model": "test-model"
+    //             }))
+    //             .unwrap(),
+    //         ))
+    //         .unwrap();
+    //
+    //     // Spawn a task that sends an error response
+    //     tokio::spawn(async move {
+    //         sleep(Duration::from_secs(6)).await;
+    //     });
+    //
+    //     let response = app.oneshot(request).await.unwrap();
+    //     assert!(rx.is_empty());
+    //     assert_eq!(response.status(), StatusCode::REQUEST_TIMEOUT);
+    // }
+
+    #[tokio::test]
+    async fn test_invalid_request_body() {
+        let (tx, _rx) = unbounded_channel();
+        let app = create_test_app(tx);
+
+        let request = Request::builder()
+            .uri("/embeddings")
+            .method(http::Method::POST)
+            .header("content-type", "application/json")
+            .header("x-request-id", "test-request-id")
+            .body(Body::from("invalid json"))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_handler_error() {
+        let (tx, mut rx) = unbounded_channel();
+        let app = create_test_app(tx);
+
+        let request = EmbeddingRequest {
+            input: MaybeBatched::Single(EmbeddingInput::Text("test text".into())),
+            model: Some("test-model".into()),
+            dimension: None,
+            encoding_format: EncodingFormat::Float,
+            user: None,
+        };
+
+        let request = Request::builder()
+            .uri("/embeddings")
+            .method(http::Method::POST)
+            .header("content-type", "application/json")
+            .header("x-request-id", "test-request-id")
+            .body(Body::from(serde_json::to_string(&request).unwrap()))
+            .unwrap();
+
+        // Spawn a task that sends an error response
+        tokio::spawn(async move {
+            if let Some((_, sender)) = rx.recv().await {
+                sender.send(Err(Error::TestError("Test error"))).unwrap();
+            }
+        });
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 }

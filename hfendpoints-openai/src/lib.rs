@@ -2,11 +2,14 @@ use crate::audio::{AUDIO_DESC, AUDIO_TAG};
 use axum::http::{HeaderName, StatusCode};
 use error::OpenAiError;
 use std::fmt::Debug;
+use std::str::FromStr;
+use std::time::Duration;
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tower::ServiceBuilder;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
+use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
-use tracing::instrument;
+use tracing::{instrument, warn};
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
@@ -57,6 +60,13 @@ where
     // Correlation-ID middleware (x-request-id)
     let x_request_id_header_name = HeaderName::from_static("x-request-id");
 
+    // Retrieve the timeout duration from envvar
+    let timeout_duration_secs = u64::from_str(
+        &std::env::var("HFENDPOINTS_REQUEST_TIMEOUT_SEC").unwrap_or(String::from("120")),
+    )
+    .inspect_err(|err| warn!("Provided HFENDPOINTS_REQUEST_TIMEOUT_SEC is invalid: {err}"))
+    .unwrap_or(120);
+
     // Default routes
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .nest("/api/v1", task_router.into())
@@ -64,7 +74,10 @@ where
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
                 .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
-                .layer(PropagateRequestIdLayer::new(x_request_id_header_name)),
+                .layer(PropagateRequestIdLayer::new(x_request_id_header_name))
+                .layer(TimeoutLayer::new(Duration::from_secs(
+                    timeout_duration_secs,
+                ))),
         )
         .routes(routes!(health))
         .split_for_parts();
