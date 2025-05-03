@@ -190,6 +190,7 @@ impl From<EmbeddingRouter> for OpenApiRouter {
 
 #[cfg(feature = "python")]
 pub(crate) mod python {
+    use pyo3::types::PyList;
     use crate::embeddings::{
         Embedding, EmbeddingInput, EmbeddingRequest, EmbeddingResponse, EmbeddingResponseTag,
         EmbeddingRouter, EmbeddingTag, EncodingFormat, MaybeBatched, Usage, EMBEDDING_OBJECT_ID,
@@ -221,12 +222,12 @@ pub(crate) mod python {
     #[pymethods]
     impl Embedding {
         #[new]
-        fn py_new(index: u32) -> Self {
-            Self {
+        fn py_new(index: u32, embedding: Bound<PyList>) -> PyResult<Self> {
+            Ok(Self {
                 object: EmbeddingTag::Embedding,
                 index: index as usize,
-                embedding: vec![],
-            }
+                embedding: embedding.extract::<Vec<f32>>()?,
+            })
         }
     }
 
@@ -262,15 +263,12 @@ pub(crate) mod python {
     #[pymethods]
     impl EmbeddingResponse {
         #[new]
-        fn py_new(model: String) -> Self {
+        fn py_new(model: String, embeddings: Vec<Embedding>, usage: Usage) -> Self {
             Self {
                 object: EmbeddingResponseTag::Object,
-                data: vec![],
+                data: embeddings,
                 model,
-                usage: Usage {
-                    prompt_tokens: 0,
-                    total_tokens: 0,
-                },
+                usage
             }
         }
     }
