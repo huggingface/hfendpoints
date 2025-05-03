@@ -35,7 +35,7 @@ pub struct Usage {
 #[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(test, derive(Deserialize))]
 #[derive(Clone, Serialize, ToSchema)]
-#[serde(rename_all = "UPPERCASE")]
+#[serde(rename_all = "lowercase")]
 enum EmbeddingTag {
     Embedding,
 }
@@ -73,7 +73,7 @@ pub enum EncodingFormat {
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(test, derive(Deserialize))]
 #[derive(Copy, Clone, Serialize, ToSchema)]
-#[serde(rename_all = "UPPERCASE")]
+#[serde(rename_all = "lowercase")]
 enum EmbeddingResponseTag {
     Object,
 }

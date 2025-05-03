@@ -192,7 +192,7 @@ pub mod python {
             pub(crate) struct $pyname(Arc<$handler>);
 
             impl Endpoint<(String, u16)> for $pyname {
-                #[instrument(skip(self))]
+                #[instrument(skip_all)]
                 async fn serve(&self, inet_address: (String, u16)) -> Result<(), Error> {
                     let (sender, receiver) = unbounded_channel();
                     let router = $router { 0: sender };
@@ -228,7 +228,7 @@ pub mod python {
                     }
                 }
 
-                #[instrument(skip(self))]
+                #[instrument(skip_all)]
                 async fn _serve_(&self, interface: String, port: u16) -> PyResult<()> {
                     if let Err(err) = self.serve((interface, port)).await {
                         error!("Caught error while serving Open Ai compatible endpoint: {err}");
