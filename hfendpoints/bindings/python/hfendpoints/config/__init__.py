@@ -2,17 +2,20 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterable
 
-from .errors import UnsupportedModelArchitecture
+from ..errors import UnsupportedModelArchitecture
 
 if TYPE_CHECKING:
     from transformers import PretrainedConfig
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class EndpointConfig:
     """
     Configuration object for an endpoint
     """
+
+    # Flag indicating if the current endpoint runs in debug
+    is_debug: bool
 
     # Interface the endpoint will be listening to incoming requests
     interface: str
@@ -33,11 +36,12 @@ class EndpointConfig:
             interface=os.environ.get("INTERFACE", "0.0.0.0"),
             port=int(os.environ.get("PORT", 8000)),
             model_id=os.environ.get("MODEL_ID", "/repository"),
+            is_debug=os.environ.get("MODEL_ID", "/repository") != "/repository"
         )
 
 
 def ensure_supported_architectures(
-    config: "PretrainedConfig", supported_archs: Iterable[str]
+        config: "PretrainedConfig", supported_archs: Iterable[str]
 ):
     """
     Check whether the specified architectures for the provided `config` are supported according to the `supported_archs`

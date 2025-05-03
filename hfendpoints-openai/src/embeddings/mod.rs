@@ -65,7 +65,12 @@ impl Embedding {
 #[derive(Clone, Copy, Deserialize, Serialize, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum EncodingFormat {
+    // #[cfg_attr(feature = "python", pyo3(name = "FLOAT"))]
+    #[pyo3(name = "FLOAT")]
     Float,
+
+    // #[cfg_attr(feature = "python", pyo3(name = "BASE64"))]
+    #[pyo3(name = "BASE64")]
     Base64,
 }
 
@@ -130,7 +135,7 @@ where
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(test, derive(Serialize))]
-#[cfg_attr(feature = "python", pyclass)]
+#[cfg_attr(feature = "python", pyclass(frozen, sequence))]
 #[derive(Clone, Deserialize, ToSchema)]
 pub struct EmbeddingRequest {
     input: MaybeBatched<EmbeddingInput>,
@@ -190,6 +195,7 @@ impl From<EmbeddingRouter> for OpenApiRouter {
 
 #[cfg(feature = "python")]
 pub(crate) mod python {
+    use pyo3::exceptions::PyIndexError;
     use pyo3::types::PyList;
     use crate::embeddings::{
         Embedding, EmbeddingInput, EmbeddingRequest, EmbeddingResponse, EmbeddingResponseTag,
@@ -233,6 +239,35 @@ pub(crate) mod python {
 
     #[pymethods]
     impl EmbeddingRequest {
+
+        pub fn __len__(&self) -> usize {
+            match &self.input {
+                MaybeBatched::Single(_) => 1,
+                MaybeBatched::Batch(items) => items.len()
+            }
+        }
+
+        pub fn __get_item__<'py>(&self, py: Python<'py>, index: usize)-> PyResult<PyObject> {
+            match &self.input {
+                MaybeBatched::Single(item) => {
+                    if index == 0 {
+                        match item {
+                            EmbeddingInput::Text(text) => Ok(text.to_object(py)),
+                            EmbeddingInput::Tokens(tokens) => Ok(tokens.to_object(py)),
+                        }
+                    } else {
+                        Err(PyErr::new::<PyIndexError, _>("index out of range"))
+                    }
+                }
+                MaybeBatched::Batch(items) => {
+                    match items.get(index).ok_or(PyErr::new::<PyIndexError, _>("index out of range"))? {
+                        EmbeddingInput::Text(text) => Ok(text.to_object(py)),
+                        EmbeddingInput::Tokens(tokens) => Ok(tokens.to_object(py)),
+                    }
+                }
+            }
+        }
+
         #[getter]
         pub fn encoding_format(&self) -> EncodingFormat {
             self.encoding_format
