@@ -62,12 +62,7 @@ impl Embedding {
 #[derive(Clone, Copy, Deserialize, Serialize, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum EncodingFormat {
-    // #[cfg_attr(feature = "python", pyo3(name = "FLOAT"))]
-    #[pyo3(name = "FLOAT")]
     Float,
-
-    // #[cfg_attr(feature = "python", pyo3(name = "BASE64"))]
-    #[pyo3(name = "BASE64")]
     Base64,
 }
 
