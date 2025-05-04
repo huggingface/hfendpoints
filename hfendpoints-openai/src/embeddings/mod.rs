@@ -221,6 +221,7 @@ pub(crate) mod python {
     #[pymethods]
     impl Embedding {
         #[new]
+        #[pyo3(signature = (index, embedding))]
         fn py_new(index: u32, embedding: Bound<PyList>) -> PyResult<Self> {
             Ok(Self {
                 object: EmbeddingTag::Embedding,
@@ -281,6 +282,7 @@ pub(crate) mod python {
     #[pymethods]
     impl EmbeddingResponse {
         #[new]
+        #[pyo3(signature = (model, embeddings, usage))]
         fn py_new(model: String, embeddings: Vec<Embedding>, usage: Usage) -> Self {
             Self {
                 object: EmbeddingResponseTag::List,
