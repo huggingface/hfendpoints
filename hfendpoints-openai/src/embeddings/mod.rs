@@ -111,6 +111,7 @@ impl IntoResponse for EmbeddingResponse {
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(test, derive(Serialize))]
+#[cfg_attr(feature = "python", derive(IntoPyObjectRef))]
 #[derive(Clone, Deserialize, ToSchema)]
 #[serde(untagged)]
 pub enum EmbeddingInput {
@@ -195,8 +196,8 @@ pub(crate) mod python {
     use pyo3::exceptions::PyIndexError;
     use pyo3::types::PyList;
     use crate::embeddings::{
-        Embedding, EmbeddingInput, EmbeddingRequest, EmbeddingResponse, EmbeddingResponseTag,
-        EmbeddingRouter, EmbeddingTag, EncodingFormat, MaybeBatched, Usage, EMBEDDING_OBJECT_ID,
+        Embedding, EmbeddingRequest, EmbeddingResponse, EmbeddingResponseTag,
+        EmbeddingRouter, EmbeddingTag, EncodingFormat, MaybeBatched, Usage,
     };
     use crate::python::{impl_pyendpoint, impl_pyhandler};
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
@@ -244,23 +245,18 @@ pub(crate) mod python {
             }
         }
 
-        pub fn __get_item__<'py>(&self, py: Python<'py>, index: usize)-> PyResult<PyObject> {
+        pub fn __get_item__<'py>(&self, py: Python<'py>, index: usize)-> PyResult<Bound<'py, PyAny>> {
             match &self.input {
                 MaybeBatched::Single(item) => {
                     if index == 0 {
-                        match item {
-                            EmbeddingInput::Text(text) => Ok(text.to_object(py)),
-                            EmbeddingInput::Tokens(tokens) => Ok(tokens.to_object(py)),
-                        }
+                        item.into_pyobject(py)
                     } else {
                         Err(PyErr::new::<PyIndexError, _>("index out of range"))
                     }
                 }
                 MaybeBatched::Batch(items) => {
-                    match items.get(index).ok_or(PyErr::new::<PyIndexError, _>("index out of range"))? {
-                        EmbeddingInput::Text(text) => Ok(text.to_object(py)),
-                        EmbeddingInput::Tokens(tokens) => Ok(tokens.to_object(py)),
-                    }
+                    let item = items.get(index).ok_or(PyErr::new::<PyIndexError, _>("index out of range"))?;
+                    item.into_pyobject(py)
                 }
             }
         }
@@ -279,16 +275,11 @@ pub(crate) mod python {
         }
 
         #[getter]
-        pub fn input(&self, py: Python<'_>) -> PyResult<PyObject> {
-            let pyobj = match &self.input {
-                MaybeBatched::Single(item) => match item {
-                    EmbeddingInput::Text(text) => text.to_object(py),
-                    EmbeddingInput::Tokens(tokens) => tokens.to_object(py),
-                },
-                MaybeBatched::Batch(items) => panic!("not supported yet"),
-            };
-
-            Ok(pyobj)
+        pub fn input<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+            match &self.input {
+                MaybeBatched::Single(item) => item.into_pyobject(py),
+                MaybeBatched::Batch(items) => items.into_pyobject(py),
+            }
         }
     }
 
