@@ -23,7 +23,7 @@ jobs:
 
     runs-on: ubuntu-latest
     env:
-      HFENDPOINTS_ENDPOINT_REPOSITORIES: "whisper-vllm-gpu;"
+      HFENDPOINTS_ENDPOINT_REPOSITORIES: "whisper-vllm-gpu;embeddings-sentence-transformers-cpu;"
 
     steps:
       # Extract the comma separated list of repository to individual HFENDPOINTS_ENDPOINT_REPOSITORY_<index>=<model_id>
