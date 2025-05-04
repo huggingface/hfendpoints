@@ -30,4 +30,5 @@ serde_json = "1.0"
 
 [features]
 default = []
-python = ["hfendpoints-binding-python/tokio", "pyo3", "rust-numpy", "numpy"]
+#python = ["hfendpoints-binding-python/tokio", "pyo3", "rust-numpy", "numpy"]
+python = ["hfendpoints-binding-python/tokio", "pyo3"]
