@@ -19,9 +19,6 @@ use utoipa_axum::routes;
 pub const EMBEDDINGS_TAG: &str = "Embeddings";
 pub const EMBEDDINGS_DESC: &str = "Get a vector representation of a given input that can be easily consumed by machine learning models and algorithms.";
 
-const EMBEDDING_OBJECT_ID: &'static str = "embedding";
-const LIST_OBJECT_ID: &'static str = "list";
-
 #[cfg_attr(feature = "python", pyclass)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(test, derive(Deserialize))]
@@ -80,7 +77,7 @@ pub enum EncodingFormat {
 #[derive(Copy, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 enum EmbeddingResponseTag {
-    Object,
+    List,
 }
 
 #[cfg_attr(feature = "python", pyclass(frozen))]
@@ -97,7 +94,7 @@ pub struct EmbeddingResponse {
 impl EmbeddingResponse {
     pub fn new(data: Vec<Embedding>, model: String, usage: Usage) -> Self {
         Self {
-            object: EmbeddingResponseTag::Object,
+            object: EmbeddingResponseTag::List,
             data,
             model,
             usage,
@@ -300,7 +297,7 @@ pub(crate) mod python {
         #[new]
         fn py_new(model: String, embeddings: Vec<Embedding>, usage: Usage) -> Self {
             Self {
-                object: EmbeddingResponseTag::Object,
+                object: EmbeddingResponseTag::List,
                 data: embeddings,
                 model,
                 usage
@@ -380,7 +377,7 @@ mod tests {
 
         // Create test response
         let response = EmbeddingResponse {
-            object: EmbeddingResponseTag::Object,
+            object: EmbeddingResponseTag::List,
             data: vec![Embedding {
                 embedding: vec![0.1, 0.2, 0.3],
                 index: 0,
