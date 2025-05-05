@@ -66,6 +66,12 @@ pub enum EncodingFormat {
     Base64,
 }
 
+impl Default for EncodingFormat {
+    fn default() -> Self {
+        Self::Float
+    }
+}
+
 #[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(test, derive(Deserialize))]
@@ -131,10 +137,11 @@ where
 #[cfg_attr(feature = "python", pyclass(frozen, sequence))]
 #[derive(Clone, Deserialize, ToSchema)]
 pub struct EmbeddingRequest {
+    #[serde(default)]
+    encoding_format: EncodingFormat,
     input: MaybeBatched<EmbeddingInput>,
     model: Option<String>,
     dimension: Option<usize>,
-    encoding_format: EncodingFormat,
     user: Option<String>,
 }
 
