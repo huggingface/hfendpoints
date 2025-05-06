@@ -2,11 +2,14 @@ use crate::audio::{AUDIO_DESC, AUDIO_TAG};
 use axum::http::{HeaderName, StatusCode};
 use error::OpenAiError;
 use std::fmt::Debug;
+use std::str::FromStr;
+use std::time::Duration;
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tower::ServiceBuilder;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
+use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
-use tracing::instrument;
+use tracing::{instrument, warn};
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
@@ -14,8 +17,10 @@ use utoipa_scalar::{Scalar, Servable};
 
 pub(crate) mod audio;
 mod context;
+pub(crate) mod embeddings;
 mod error;
 mod headers;
+
 pub use context::Context;
 
 type OpenAiResult<T> = Result<T, OpenAiError>;
@@ -55,6 +60,13 @@ where
     // Correlation-ID middleware (x-request-id)
     let x_request_id_header_name = HeaderName::from_static("x-request-id");
 
+    // Retrieve the timeout duration from envvar
+    let timeout_duration_secs = u64::from_str(
+        &std::env::var("HFENDPOINTS_REQUEST_TIMEOUT_SEC").unwrap_or(String::from("120")),
+    )
+    .inspect_err(|err| warn!("Provided HFENDPOINTS_REQUEST_TIMEOUT_SEC is invalid: {err}"))
+    .unwrap_or(120);
+
     // Default routes
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .nest("/api/v1", task_router.into())
@@ -62,7 +74,10 @@ where
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
                 .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
-                .layer(PropagateRequestIdLayer::new(x_request_id_header_name)),
+                .layer(PropagateRequestIdLayer::new(x_request_id_header_name))
+                .layer(TimeoutLayer::new(Duration::from_secs(
+                    timeout_duration_secs,
+                ))),
         )
         .routes(routes!(health))
         .split_for_parts();
@@ -79,7 +94,6 @@ where
 pub mod python {
     use hfendpoints_binding_python::tokio::create_multithreaded_runtime;
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
-    use hfendpoints_core::Endpoint;
     use pyo3::prelude::*;
     use pyo3::prepare_freethreaded_python;
     use pyo3_async_runtimes::tokio::init;
@@ -178,7 +192,7 @@ pub mod python {
             pub(crate) struct $pyname(Arc<$handler>);
 
             impl Endpoint<(String, u16)> for $pyname {
-                #[instrument(skip(self))]
+                #[instrument(skip_all)]
                 async fn serve(&self, inet_address: (String, u16)) -> Result<(), Error> {
                     let (sender, receiver) = unbounded_channel();
                     let router = $router { 0: sender };
@@ -188,8 +202,12 @@ pub mod python {
                     let _ = pyo3_async_runtimes::tokio::get_runtime()
                         .spawn(wait_for_requests(receiver, handler));
 
-                    info!("Starting endpoint at {}:{}", &inet_address.0, &inet_address.1);
-                    pyo3_async_runtimes::tokio::get_runtime().spawn(serve_openai(inet_address, router))
+                    info!(
+                        "Starting endpoint at {}:{}",
+                        &inet_address.0, &inet_address.1
+                    );
+                    pyo3_async_runtimes::tokio::get_runtime()
+                        .spawn(serve_openai(inet_address, router))
                         .await
                         .inspect_err(|err| {
                             info!("Caught error while serving endpoint: {err}");
@@ -210,7 +228,7 @@ pub mod python {
                     }
                 }
 
-                #[instrument(skip(self))]
+                #[instrument(skip_all)]
                 async fn _serve_(&self, interface: String, port: u16) -> PyResult<()> {
                     if let Err(err) = self.serve((interface, port)).await {
                         error!("Caught error while serving Open Ai compatible endpoint: {err}");
@@ -235,9 +253,12 @@ pub mod python {
             .await?;
 
         Python::with_gil(|py| {
-            let coro = endpoint.bind(py).call_method1("_serve_", (interface, port))?;
+            let coro = endpoint
+                .bind(py)
+                .call_method1("_serve_", (interface, port))?;
             pyo3_async_runtimes::into_future_with_locals(&locals, coro)
-        })?.await?;
+        })?
+        .await?;
         Ok(())
     }
 
@@ -270,6 +291,10 @@ pub mod python {
             .defaults()?
             .add_class::<Context>()?
             .add_submodule(&crate::audio::python::bind(py, &format!("{name}.audio"))?)?
+            .add_submodule(&crate::embeddings::python::bind(
+                py,
+                &format!("{name}.embeddings"),
+            )?)?
             .finish();
 
         module.add_function(wrap_pyfunction!(run, &module)?)?;
