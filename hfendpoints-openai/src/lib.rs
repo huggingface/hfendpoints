@@ -1,4 +1,5 @@
 use crate::audio::{AUDIO_DESC, AUDIO_TAG};
+use crate::embeddings::{EMBEDDINGS_DESC, EMBEDDINGS_TAG};
 use axum::http::{HeaderName, StatusCode};
 use error::OpenAiError;
 use std::fmt::Debug;
@@ -48,6 +49,7 @@ async fn health() -> StatusCode {
     tags(
         (name = STATUS_TAG, description = STATUS_DESC),
         (name = AUDIO_TAG, description = AUDIO_DESC),
+        (name = EMBEDDINGS_TAG, description = EMBEDDINGS_DESC)
     )
 )]
 struct ApiDoc;
