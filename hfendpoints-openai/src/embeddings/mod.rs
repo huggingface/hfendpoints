@@ -3,12 +3,12 @@ use pyo3::prelude::*;
 
 use crate::error::OpenAiError;
 use crate::headers::RequestId;
-use crate::{Context, OpenAiResult};
+use crate::{Context, OpenAiResult, RequestWithContext};
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use axum_extra::TypedHeader;
-use hfendpoints_core::{EndpointContext, Error};
+use hfendpoints_core::{EndpointContext, EndpointResult, Error};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::instrument;
@@ -145,6 +145,8 @@ pub struct EmbeddingRequest {
     user: Option<String>,
 }
 
+type EmbeddingRequestWithContext = RequestWithContext<EmbeddingRequest>;
+
 #[utoipa::path(
     post,
     path = "/embeddings",
@@ -156,7 +158,7 @@ pub struct EmbeddingRequest {
 )]
 #[instrument(skip(state, request))]
 pub async fn embed(
-    State(state): State<EndpointContext<(EmbeddingRequest, Context), EmbeddingResponse>>,
+    State(state): State<EndpointContext<EmbeddingRequestWithContext, EmbeddingResponse>>,
     request_id: TypedHeader<RequestId>,
     Json(request): Json<EmbeddingRequest>,
 ) -> OpenAiResult<EmbeddingResponse> {
@@ -176,9 +178,9 @@ pub async fn embed(
 /// [OpenAi Platform compatible Transcription endpoint](https://platform.openai.com/docs/api-reference/audio/createTranscription)
 #[derive(Clone)]
 pub struct EmbeddingRouter(
-    pub  UnboundedSender<(
-        (EmbeddingRequest, Context),
-        UnboundedSender<Result<EmbeddingResponse, Error>>,
+    pub UnboundedSender<(
+        EmbeddingRequestWithContext,
+        UnboundedSender<EndpointResult<EmbeddingResponse>>,
     )>,
 );
 
@@ -186,10 +188,7 @@ impl From<EmbeddingRouter> for OpenApiRouter {
     fn from(value: EmbeddingRouter) -> Self {
         OpenApiRouter::new()
             .routes(routes!(embed))
-            .with_state(EndpointContext::<
-                (EmbeddingRequest, Context),
-                EmbeddingResponse,
-            >::new(value.0))
+            .with_state(EndpointContext::new(value.0))
     }
 }
 
@@ -344,7 +343,7 @@ mod tests {
     // Test helper to create a test app
     fn create_test_app(
         sender: UnboundedSender<(
-            (EmbeddingRequest, Context),
+            EmbeddingRequestWithContext,
             UnboundedSender<Result<EmbeddingResponse, Error>>,
         )>,
     ) -> Router {

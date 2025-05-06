@@ -7,10 +7,11 @@ pub use context::EndpointContext;
 pub use endpoint::Endpoint;
 pub use handler::{wait_for_requests, Handler};
 pub use metrics::InFlightStats;
+use thiserror::Error;
 
 #[cfg(feature = "python")]
 use pyo3::PyErr;
-use thiserror::Error;
+
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -21,3 +22,7 @@ pub enum Error {
     #[error("{0}")]
     TestError(&'static str),
 }
+
+
+/// Result with predefined hfendpoints-core::Error as the Error type
+pub type EndpointResult<T> = Result<T, Error>;
