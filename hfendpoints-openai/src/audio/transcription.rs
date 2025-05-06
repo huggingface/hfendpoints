@@ -1,13 +1,13 @@
 use crate::audio::AUDIO_TAG;
 use crate::context::Context;
 use crate::headers::RequestId;
-use crate::{OpenAiError, OpenAiResult};
+use crate::{OpenAiError, OpenAiResult, RequestWithContext};
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Multipart, State};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use axum_extra::TypedHeader;
-use hfendpoints_core::{EndpointContext, Error};
+use hfendpoints_core::{EndpointContext, EndpointResult, Error};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tokio::sync::mpsc::UnboundedSender;
@@ -378,6 +378,8 @@ impl TranscriptionRequest {
     }
 }
 
+type TranscriptionRequestWithContext = RequestWithContext<TranscriptionRequest>;
+
 #[utoipa::path(
     post,
     path = "/audio/transcriptions",
@@ -389,7 +391,7 @@ impl TranscriptionRequest {
 )]
 #[instrument(skip(state, multipart))]
 pub async fn transcribe(
-    State(state): State<EndpointContext<(TranscriptionRequest, Context), TranscriptionResponse>>,
+    State(state): State<EndpointContext<TranscriptionRequestWithContext, TranscriptionResponse>>,
     request_id: TypedHeader<RequestId>,
     multipart: Multipart,
 ) -> OpenAiResult<TranscriptionResponse> {
@@ -413,8 +415,8 @@ pub async fn transcribe(
 #[derive(Clone)]
 pub struct TranscriptionRouter(
     pub UnboundedSender<(
-        (TranscriptionRequest, Context),
-        UnboundedSender<Result<TranscriptionResponse, Error>>,
+        TranscriptionRequestWithContext,
+        UnboundedSender<EndpointResult<TranscriptionResponse>>,
     )>,
 );
 
@@ -422,7 +424,7 @@ impl From<TranscriptionRouter> for OpenApiRouter {
     fn from(value: TranscriptionRouter) -> Self {
         OpenApiRouter::new()
             .routes(routes!(transcribe))
-            .with_state(EndpointContext::<(TranscriptionRequest, Context), TranscriptionResponse>::new(value.0))
+            .with_state(EndpointContext::new(value.0))
             .layer(DefaultBodyLimit::max(200 * 1024 * 1024)) // 200Mb as OpenAI
     }
 }

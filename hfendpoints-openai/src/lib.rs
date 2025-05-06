@@ -24,6 +24,7 @@ mod headers;
 pub use context::Context;
 
 type OpenAiResult<T> = Result<T, OpenAiError>;
+type RequestWithContext<I> = (I, Context);
 
 const STATUS_TAG: &str = "Status";
 const STATUS_DESC: &str = "Healthiness and monitoring of the endpoint";
