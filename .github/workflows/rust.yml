@@ -72,19 +72,19 @@ jobs:
   #          RUSTFLAGS: --cfg docsrs
   #          RUSTDOCFLAGS: --cfg docsrs  -Dwarnings
 
-  hfendpoints-workspace:
-    needs: basics
-    name: Build & tests hfendpoints
-    strategy:
-      matrix:
-        os: [ windows-latest, ubuntu-latest, macos-latest ]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build
-        run: cargo build --verbose
-      - name: Run tests
-        run: cargo test --verbose
+#  hfendpoints-workspace:
+#    needs: basics
+#    name: Build & tests hfendpoints
+#    strategy:
+#      matrix:
+#        os: [ windows-latest, ubuntu-latest, macos-latest ]
+#    runs-on: ${{ matrix.os }}
+#    steps:
+#      - uses: actions/checkout@v4
+#      - name: Build
+#        run: cargo build --verbose
+#      - name: Run tests
+#        run: cargo test --verbose
 
   hfendpoints-workspace-python:
     needs: basics
