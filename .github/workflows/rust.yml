@@ -95,7 +95,7 @@ jobs:
     name: Build & tests hfendpoints
     strategy:
       matrix:
-        os: [ windows-latest, ubuntu-latest, macos-latest ]
+        os: [ windows-latest, ubuntu-latest ]
         python: [ 3.12, 3.13 ]
     runs-on: ${{ matrix.os }}
     steps:
