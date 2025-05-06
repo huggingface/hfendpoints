@@ -1,9 +1,7 @@
 name: Hugging Face Inference Endpoint integration tests
 on:
-  pull_request:
   merge_group:
-    types:
-      - checks_requested
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-build
@@ -179,6 +177,7 @@ jobs:
             ENDPOINT_URL=${{ env.ENDPOINT_URL }}
 
       - name: "Run unittest with hfjobs"
+        id: run_integration_tests
         if: ${{ steps.build_container_test_runner.outcome == 'success' }}
         continue-on-error: true
         run: |
