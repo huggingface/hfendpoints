@@ -5,6 +5,7 @@ on:
     branches: [ "main", "hfendpoints-v*.*" ]
   pull_request:
     branches: [ "main", "hfendpoints-v*.*" ]
+  merge_group:
 
 permissions:
   contents: read
