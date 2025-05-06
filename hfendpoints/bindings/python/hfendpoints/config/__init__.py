@@ -35,7 +35,7 @@ class EndpointConfig:
         return EndpointConfig(
             interface=os.environ.get("INTERFACE", "0.0.0.0"),
             port=int(os.environ.get("PORT", 8000)),
-            model_id=os.environ.get("HF_MODEL_ID", "unknown"),
+            model_id=os.environ.get("HF_MODEL", "unknown"),
             is_debug=os.environ.get("MODEL_ID", "/repository") != "/repository"
         )
 
