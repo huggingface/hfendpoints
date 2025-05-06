@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
 from ..errors import UnsupportedModelArchitecture
@@ -26,6 +27,9 @@ class EndpointConfig:
     # Model to use for this endpoint
     model_id: str
 
+    # Local path where are stored pre-downloaded artifact for the endpoint
+    repository: Path
+
     @staticmethod
     def from_env() -> "EndpointConfig":
         """
@@ -36,6 +40,7 @@ class EndpointConfig:
             interface=os.environ.get("INTERFACE", "0.0.0.0"),
             port=int(os.environ.get("PORT", 8000)),
             model_id=os.environ.get("HF_MODEL", "unknown"),
+            repository=Path(os.environ.get("MODEL_ID", os.environ.get("HF_MODEL", "/repository"))),
             is_debug=os.environ.get("MODEL_ID", "/repository") != "/repository"
         )
 
