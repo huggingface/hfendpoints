@@ -1,5 +1,5 @@
 [package]
-name = "hfendpoints-openai"
+name = "hfendpoints-http"
 version = "0.1.0"
 edition = "2024"
 

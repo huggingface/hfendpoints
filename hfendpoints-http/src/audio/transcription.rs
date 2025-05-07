@@ -1,13 +1,13 @@
 use crate::audio::AUDIO_TAG;
 use crate::context::Context;
 use crate::headers::RequestId;
-use crate::{OpenAiError, OpenAiResult, RequestWithContext};
+use crate::{HttpError, HttpResult, RequestWithContext};
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Multipart, State};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use axum_extra::TypedHeader;
-use hfendpoints_core::{EndpointContext, EndpointResult, Error};
+use hfendpoints_core::{EndpointContext, EndpointResult};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tokio::sync::mpsc::UnboundedSender;
@@ -123,27 +123,25 @@ impl SegmentBuilder {
         self
     }
 
-    pub fn build(self) -> OpenAiResult<Segment> {
+    pub fn build(self) -> HttpResult<Segment> {
         Ok(Segment {
-            id: self.id.ok_or(OpenAiError::Validation(String::from(
+            id: self.id.ok_or(HttpError::Validation(String::from(
                 "Segment::id is not set",
             )))?,
-            start: self.start.ok_or(OpenAiError::Validation(String::from(
+            start: self.start.ok_or(HttpError::Validation(String::from(
                 "Segment::start is not set",
             )))?,
-            end: self.end.ok_or(OpenAiError::Validation(String::from(
+            end: self.end.ok_or(HttpError::Validation(String::from(
                 "Segment::end is not set",
             )))?,
             seek: self.seek.unwrap_or(0),
-            temperature: self
-                .temperature
-                .ok_or(OpenAiError::Validation(String::from(
-                    "Segment::temperature is not set",
-                )))?,
-            text: self.text.ok_or(OpenAiError::Validation(String::from(
+            temperature: self.temperature.ok_or(HttpError::Validation(String::from(
+                "Segment::temperature is not set",
+            )))?,
+            text: self.text.ok_or(HttpError::Validation(String::from(
                 "Segment::text is not set",
             )))?,
-            tokens: self.tokens.ok_or(OpenAiError::Validation(String::from(
+            tokens: self.tokens.ok_or(HttpError::Validation(String::from(
                 "Segment::tokens is not set",
             )))?,
             avg_logprob: self.avg_logprob.unwrap_or(0.0),
@@ -312,10 +310,10 @@ impl TranscriptionRequest {
         prompt: Option<String>,
         temperature: Option<f32>,
         response_format: Option<String>,
-    ) -> OpenAiResult<Self> {
+    ) -> HttpResult<Self> {
         let file = match file {
             Some(file) => Ok(file),
-            None => Err(OpenAiError::Validation(
+            None => Err(HttpError::Validation(
                 "Required parameter 'file' was not provided".to_string(),
             )),
         }?;
@@ -325,7 +323,7 @@ impl TranscriptionRequest {
             "json" => Ok(ResponseFormat::Json),
             "verbose_json" => Ok(ResponseFormat::VerboseJson),
             "text" => Ok(ResponseFormat::Text),
-            _ => Err(OpenAiError::Validation(format!(
+            _ => Err(HttpError::Validation(format!(
                 "Unknown response_format: {response_format}. Possible values are: 'json', 'verbose_json', 'text'."
             ))),
         }?;
@@ -344,13 +342,13 @@ impl TranscriptionRequest {
     }
 
     #[instrument(skip_all)]
-    async fn try_from_multipart(mut multipart: Multipart) -> OpenAiResult<Self> {
-        let mut file: OpenAiResult<Option<Bytes>> = Ok(None);
+    async fn try_from_multipart(mut multipart: Multipart) -> HttpResult<Self> {
+        let mut file: HttpResult<Option<Bytes>> = Ok(None);
         let mut content_type: Option<String> = None;
-        let mut language: OpenAiResult<Option<String>> = Ok(None);
-        let mut prompt: OpenAiResult<Option<String>> = Ok(None);
-        let mut temperature: OpenAiResult<Option<f32>> = Ok(None);
-        let mut response_format: OpenAiResult<Option<String>> = Ok(None);
+        let mut language: HttpResult<Option<String>> = Ok(None);
+        let mut prompt: HttpResult<Option<String>> = Ok(None);
+        let mut temperature: HttpResult<Option<f32>> = Ok(None);
+        let mut response_format: HttpResult<Option<String>> = Ok(None);
 
         while let Some(field) = multipart.next_field().await? {
             let name = field.name().unwrap().to_string();
@@ -363,7 +361,7 @@ impl TranscriptionRequest {
                 "prompt" => prompt = Ok(Some(field.text().await?.to_string())),
                 "temperature" => temperature = Ok(Some(f32::from_str(&field.text().await?)?)),
                 "response_format" => response_format = Ok(Some(field.text().await?.to_string())),
-                _ => return Err(OpenAiError::Validation(format!("Unknown field: {name}"))),
+                _ => return Err(HttpError::Validation(format!("Unknown field: {name}"))),
             }
         }
 
@@ -394,7 +392,7 @@ pub async fn transcribe(
     State(state): State<EndpointContext<TranscriptionRequestWithContext, TranscriptionResponse>>,
     request_id: TypedHeader<RequestId>,
     multipart: Multipart,
-) -> OpenAiResult<TranscriptionResponse> {
+) -> HttpResult<TranscriptionResponse> {
     // Decode request
     let request = TranscriptionRequest::try_from_multipart(multipart).await?;
 
@@ -406,7 +404,7 @@ pub async fn transcribe(
     if let Some(response) = egress.recv().await {
         Ok(response?)
     } else {
-        Err(OpenAiError::NoResponse)
+        Err(HttpError::NoResponse)
     }
 }
 
@@ -414,7 +412,7 @@ pub async fn transcribe(
 /// [OpenAi Platform compatible Transcription endpoint](https://platform.openai.com/docs/api-reference/audio/createTranscription)
 #[derive(Clone)]
 pub struct TranscriptionRouter(
-    pub UnboundedSender<(
+    pub  UnboundedSender<(
         TranscriptionRequestWithContext,
         UnboundedSender<EndpointResult<TranscriptionResponse>>,
     )>,
@@ -431,7 +429,10 @@ impl From<TranscriptionRouter> for OpenApiRouter {
 
 #[cfg(feature = "python")]
 pub(crate) mod python {
-    use crate::audio::transcription::{ResponseFormat, Segment, Transcription, TranscriptionRequest, TranscriptionResponse, VerboseTranscription};
+    use crate::audio::transcription::{
+        ResponseFormat, Segment, Transcription, TranscriptionRequest, TranscriptionResponse,
+        VerboseTranscription,
+    };
     use hfendpoints_binding_python::fill_view_from_readonly_data;
     use pyo3::ffi::Py_buffer;
     use pyo3::prelude::*;
@@ -450,7 +451,6 @@ pub(crate) mod python {
         #[pyo3(name = "VERBOSE_JSON")]
         VerboseJson = 3,
     }
-
 
     #[pymethods]
     impl Segment {
@@ -506,9 +506,15 @@ pub(crate) mod python {
     #[pymethods]
     impl TranscriptionRequest {
         #[instrument(skip(slf, buffer))]
-        pub unsafe fn __getbuffer__(slf: Bound<'_, Self>, buffer: *mut Py_buffer, flags: i32) -> PyResult<()> {
+        pub unsafe fn __getbuffer__(
+            slf: Bound<'_, Self>,
+            buffer: *mut Py_buffer,
+            flags: i32,
+        ) -> PyResult<()> {
             debug!("Acquiring a memoryview over audio data (flags={})", flags);
-            unsafe { fill_view_from_readonly_data(buffer, flags, &slf.borrow().file, slf.into_any()) }
+            unsafe {
+                fill_view_from_readonly_data(buffer, flags, &slf.borrow().file, slf.into_any())
+            }
         }
 
         #[instrument(skip_all)]
@@ -538,7 +544,7 @@ pub(crate) mod python {
             match self.response_format {
                 ResponseFormat::Json => Ok(TranscriptionResponseKind::Json),
                 ResponseFormat::Text => Ok(TranscriptionResponseKind::Text),
-                ResponseFormat::VerboseJson => Ok(TranscriptionResponseKind::VerboseJson)
+                ResponseFormat::VerboseJson => Ok(TranscriptionResponseKind::VerboseJson),
             }
         }
     }

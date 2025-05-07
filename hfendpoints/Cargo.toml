@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 [dependencies]
 hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
 hfendpoints-core = { path = "../hfendpoints-core", optional = true }
-hfendpoints-openai = { path = "../hfendpoints-openai" }
+hfendpoints-http = { path = "../hfendpoints-http" }
 pyo3 = { workspace = true, optional = true, features = ["auto-initialize", "extension-module"] }
 pyo3-log = { version = "0.12.3", optional = true }
 tracing = "0.1"
@@ -23,5 +23,5 @@ python = [
     "pyo3-log",
     "hfendpoints-binding-python",
     "hfendpoints-core/python",
-    "hfendpoints-openai/python"
+    "hfendpoints-http/python"
 ]
