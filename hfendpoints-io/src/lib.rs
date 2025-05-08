@@ -1,9 +1,10 @@
 use pyo3::FromPyObject;
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 use utoipa::ToSchema;
 
 pub mod audio;
-pub mod embeddings;
+pub mod embedding;
 
 /// Container enum representing either a single element `T` or a sequence whose elements are of type `T`
 ///
@@ -53,7 +54,7 @@ pub enum MaybeBatched<T> {
 /// # Examples
 ///
 /// ```
-/// use hfendpoints_tasks::Usage;
+/// use hfendpoints_io::Usage;
 /// let usage = Usage { prompt_tokens: 1024, total_tokens: 1084 };
 /// assert_eq!(usage.prompt_tokens, 1024);
 /// assert_eq!(usage.total_tokens, 1084);
@@ -80,6 +81,16 @@ impl Usage {
     #[inline]
     pub fn same(tokens: usize) -> Self {
         Self::new(tokens, tokens)
+    }
+}
+
+impl Display for Usage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Usage(prompt_tokens={}, total_tokens={})",
+            self.prompt_tokens, self.total_tokens
+        )
     }
 }
 
@@ -116,7 +127,7 @@ where
 
 #[cfg(feature = "python")]
 pub mod python {
-    use crate::embeddings;
+    use crate::{audio, embedding};
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
     use pyo3::prelude::PyModule;
     use pyo3::{Bound, PyResult, Python};
@@ -124,10 +135,8 @@ pub mod python {
     pub fn bind<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
         let module = ImportablePyModuleBuilder::new(py, name)?
             .defaults()?
-            .add_submodule(&embeddings::python::bind(
-                py,
-                &format!("{name}.embeddings"),
-            )?)?
+            .add_submodule(&embedding::python::bind(py, &format!("{name}.embedding"))?)?
+            .add_submodule(&audio::python::bind(py, &format!("{name}.audio"))?)?
             .finish();
         Ok(module)
     }

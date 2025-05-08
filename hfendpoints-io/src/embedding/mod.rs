@@ -8,7 +8,7 @@ pub type EmbeddingResponse = EndpointResponse<MaybeBatched<Vec<f32>>, Usage>;
 
 #[cfg(feature = "python")]
 pub(crate) mod python {
-    use crate::embeddings::{EmbeddingRequest, EmbeddingResponse};
+    use crate::embedding::{EmbeddingRequest, EmbeddingResponse};
     use crate::{EndpointResponse, MaybeBatched, Usage};
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
     use numpy::{PyArray1, PyArray2, PyArrayMethods, PyUntypedArrayMethods};
