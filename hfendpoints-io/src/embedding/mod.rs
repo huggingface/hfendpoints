@@ -1,10 +1,19 @@
 use crate::{EndpointRequest, EndpointResponse, MaybeBatched, Usage};
+use hfendpoints_core::Handler;
 
 /// Represents a request to compute embeddings
 pub type EmbeddingRequest = EndpointRequest<MaybeBatched<String>, ()>;
 
 /// Represent a response to
 pub type EmbeddingResponse = EndpointResponse<MaybeBatched<Vec<f32>>, Usage>;
+
+/// Helper trait to implement `Handler` specification for Transcription endpoints
+pub trait EmbeddingHandler:
+    Handler<Request = Self::TypedRequest, Response = Self::TypedResponse>
+{
+    type TypedRequest: Into<EmbeddingRequest>;
+    type TypedResponse: From<EmbeddingResponse>;
+}
 
 #[cfg(feature = "python")]
 pub(crate) mod python {

@@ -2,6 +2,7 @@ use crate::{EndpointRequest, EndpointResponse, Usage};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use hfendpoints_core::Handler;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
@@ -53,11 +54,19 @@ pub enum Transcription {
     Detailed(DetailedTranscription),
 }
 
-///
+/// Endpoint request specification for Transcription endpoints
 pub type TranscriptionRequest = EndpointRequest<String, TranscriptionParams>;
 
-///
+/// Endpoint response specification for Transcription endpoints
 pub type TranscriptionResponse = EndpointResponse<Transcription, Usage>;
+
+/// Helper trait to implement `Handler` specification for Transcription endpoints
+pub trait TranscriptionHandler:
+    Handler<Request = Self::TypedRequest, Response = Self::TypedResponse>
+{
+    type TypedRequest: Into<TranscriptionRequest>;
+    type TypedResponse: From<TranscriptionResponse>;
+}
 
 impl Default for TranscriptionParams {
     #[inline]

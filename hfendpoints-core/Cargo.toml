@@ -8,7 +8,7 @@ hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional 
 pyo3 = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
 thiserror = "2.0"
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["sync", "rt"] }
 tracing = "0.1"
 
 [features]

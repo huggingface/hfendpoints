@@ -1,7 +1,9 @@
-use crate::{EndpointResult, Error};
+use crate::EndpointResult;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 /// Store some information about the context in which the endpoint runs
+///
+/// Cloning this context will only clone the underlying file descriptor used for the IPC channel
 #[derive(Clone)]
 pub struct EndpointContext<I, O> {
     // /// Realtime information streaming about underlying resources usage of the handler
@@ -17,7 +19,7 @@ impl<I, O> EndpointContext<I, O> {
     pub fn schedule(&self, request: I) -> UnboundedReceiver<EndpointResult<O>> {
         let (sender, receiver) = unbounded_channel();
         if let Err(e) = self.ipc.send((request, sender)) {
-            panic!("Failed to send to IPC");
+            panic!("Failed to send to IPC: {e}");
         }
 
         receiver
