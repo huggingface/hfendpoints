@@ -12,7 +12,7 @@ pub enum HttpError {
     #[error("Endpoint error: {0}")]
     Endpoint(#[from] EndpointError),
 
-    #[error("I/O Error occured: {0}")]
+    #[error("I/O Error occurred: {0}")]
     Io(#[from] TokioIoError),
 
     #[error("Malformed multipart/form-data payload: {0}")]

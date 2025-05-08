@@ -4,7 +4,8 @@ members = [
     "hfendpoints",
     "hfendpoints-binding-python",
     "hfendpoints-core",
-    "hfendpoints-http"
+    "hfendpoints-http",
+    "hfendpoints-io"
 ]
 
 [workspace.dependencies]

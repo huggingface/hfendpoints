@@ -1,0 +1,16 @@
+[package]
+name = "hfendpoints-io"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
+numpy = { version = "0.24.0", optional = true }
+rust-numpy = { version = "0.1.0", optional = true }
+serde = { workspace = true, features = ["derive"] }
+pyo3 = { workspace = true, optional = true }
+utoipa = "5.3.1"
+
+[features]
+default = []
+python = ["hfendpoints-binding-python", "pyo3", "numpy", "rust-numpy"]
