@@ -15,7 +15,6 @@ pub(crate) mod python {
     use pyo3::prelude::*;
     use pyo3::types::PyList;
     use pyo3::IntoPyObjectExt;
-    use std::ops::Index;
 
     #[pyclass(name = "EmbeddingRequest", frozen)]
     pub struct PyEmbeddingRequest(EmbeddingRequest);
@@ -74,7 +73,7 @@ pub(crate) mod python {
         ///
         /// # Arguments
         ///
-        /// * `embeddings`: Python's NumPy 1d-ndarray of float32
+        /// * `embeddings`: Python's NumPy 1d or 2d ndarray of float32
         /// * `num_tokens`: Number of tokens
         ///
         /// Returns: Result<PyEmbeddingResponse, PyErr>
@@ -83,9 +82,12 @@ pub(crate) mod python {
             embeddings: SupportedEmbeddingsArray,
             num_tokens: usize,
         ) -> PyResult<Self> {
-            //TODO(mfuntowicz) This does a copy for now
             let output = match embeddings {
-                SupportedEmbeddingsArray::Single(item) => MaybeBatched::Single(item.to_vec()?),
+                SupportedEmbeddingsArray::Single(item) => unsafe {
+                    MaybeBatched::Single(Vec::from_raw_parts(item.data(), item.len(), item.len()))
+                },
+
+                //TODO(mfuntowicz) This does a copy for now
                 SupportedEmbeddingsArray::Batched(items) => {
                     let hidden = items.dims()[1];
                     let buffer = items.to_vec()?;
