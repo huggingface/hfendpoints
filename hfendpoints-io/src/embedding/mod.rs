@@ -1,8 +1,21 @@
 use crate::{EndpointRequest, EndpointResponse, MaybeBatched, Usage};
 use hfendpoints_core::Handler;
+use utoipa::ToSchema;
+
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Copy, Clone, ToSchema)]
+pub struct EmbeddingParams {
+    normalize: bool,
+}
+
+impl Default for EmbeddingParams {
+    fn default() -> Self {
+        Self { normalize: false }
+    }
+}
 
 /// Represents a request to compute embeddings
-pub type EmbeddingRequest = EndpointRequest<MaybeBatched<String>, ()>;
+pub type EmbeddingRequest = EndpointRequest<MaybeBatched<String>, EmbeddingParams>;
 
 /// Represent a response to
 pub type EmbeddingResponse = EndpointResponse<MaybeBatched<Vec<f32>>, Usage>;
@@ -56,7 +69,7 @@ pub(crate) mod python {
 
     #[pymethods]
     impl PyEmbeddingResponse {
-        /// Create an EmbeddingResponse by copying a Python's heap-allocated list into Rust's heap
+        /// Create an EmbeddingResponse by copying a Python's heap-allocated list into Rust's heapxc
         ///
         /// # Arguments
         ///
@@ -146,5 +159,55 @@ pub(crate) mod python {
             .finish();
 
         Ok(module)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::MaybeBatched;
+
+    #[test]
+    fn test_single_embedding_request() {
+        let input = "test text".to_string();
+        let request = EmbeddingRequest {
+            inputs: MaybeBatched::Single(input.clone()),
+            parameters: EmbeddingParams::default(),
+        };
+
+        match request.inputs {
+            MaybeBatched::Single(text) => assert_eq!(text, input),
+            _ => panic!("Expected Single variant"),
+        }
+    }
+
+    #[test]
+    fn test_batched_embedding_request() {
+        let inputs = vec!["text1".to_string(), "text2".to_string()];
+        let request = EmbeddingRequest {
+            inputs: MaybeBatched::Batched(inputs.clone()),
+            parameters: EmbeddingParams::default(),
+        };
+
+        match request.inputs {
+            MaybeBatched::Batched(texts) => assert_eq!(texts, inputs),
+            _ => panic!("Expected Batched variant"),
+        }
+    }
+
+    #[test]
+    fn test_embedding_params_creation() {
+        let params = EmbeddingParams { normalize: true };
+        assert!(params.normalize);
+
+        let params = EmbeddingParams { normalize: false };
+        assert!(!params.normalize);
+    }
+
+    #[test]
+    fn test_embedding_params_clone() {
+        let params = EmbeddingParams { normalize: true };
+        let cloned_params = params.clone();
+        assert_eq!(params.normalize, cloned_params.normalize);
     }
 }

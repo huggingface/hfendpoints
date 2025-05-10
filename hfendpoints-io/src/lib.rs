@@ -1,7 +1,9 @@
-use pyo3::FromPyObject;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use utoipa::ToSchema;
+
+#[cfg(feature = "python")]
+use pyo3::FromPyObject;
 
 pub mod audio;
 pub mod embedding;
@@ -14,7 +16,9 @@ pub mod embedding;
 /// let single = MaybeBatched::Single("My name is Morgan");
 /// let batch = MaybeBatched::Batched(vec!["My name is Morgan", "I'm working at Hugging Face"]);
 /// ```
-#[derive(Deserialize, ToSchema, FromPyObject)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg_attr(feature = "python", derive(FromPyObject))]
+#[derive(Deserialize, ToSchema)]
 #[serde(untagged)]
 pub enum MaybeBatched<T> {
     /// Single element

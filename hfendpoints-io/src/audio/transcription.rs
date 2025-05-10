@@ -1,8 +1,8 @@
 use crate::{EndpointRequest, EndpointResponse, Usage};
+use hfendpoints_core::Handler;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use hfendpoints_core::Handler;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
@@ -149,5 +149,37 @@ pub(crate) mod python {
             .finish();
 
         Ok(module)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_transcription_params_default() {
+        let params = TranscriptionParams::default();
+        assert_eq!(params.prompt, None);
+        assert_eq!(params.language, Some(String::from("en")));
+        assert_eq!(params.temperature, Some(0.0));
+        assert_eq!(params.top_k, None);
+        assert_eq!(params.top_p, Some(1.0));
+    }
+
+    #[test]
+    fn test_transcription_params_custom() {
+        let params = TranscriptionParams {
+            prompt: Some(String::from("test prompt")),
+            language: Some(String::from("fr")),
+            temperature: Some(0.8),
+            top_k: Some(50),
+            top_p: Some(0.9),
+        };
+
+        assert_eq!(params.prompt, Some(String::from("test prompt")));
+        assert_eq!(params.language, Some(String::from("fr")));
+        assert_eq!(params.temperature, Some(0.8));
+        assert_eq!(params.top_k, Some(50));
+        assert_eq!(params.top_p, Some(0.9));
     }
 }
