@@ -1,6 +1,6 @@
 from typing import List
 
-from ..._hfendpoints.openai.audio import (
+from ..._hfendpoints.http.audio import (
     AutomaticSpeechRecognitionEndpoint,
     Segment,
     Transcription,
@@ -25,7 +25,7 @@ class SegmentBuilder:
         self._no_speech_prob = 0.0
 
     def build(
-        self,
+            self,
     ) -> Segment:
         if self._id is None:
             raise ValueError("Segment's id cannot be None")

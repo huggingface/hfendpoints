@@ -8,11 +8,11 @@ use tokio::io::Error as TokioIoError;
 
 /// Define all the possible errors for OpenAI Compatible Endpoint
 #[derive(Debug, Error)]
-pub enum OpenAiError {
+pub enum HttpError {
     #[error("Endpoint error: {0}")]
     Endpoint(#[from] EndpointError),
 
-    #[error("I/O Error occured: {0}")]
+    #[error("I/O Error occurred: {0}")]
     Io(#[from] TokioIoError),
 
     #[error("Malformed multipart/form-data payload: {0}")]
@@ -25,14 +25,14 @@ pub enum OpenAiError {
     NoResponse,
 }
 
-impl From<ParseFloatError> for OpenAiError {
+impl From<ParseFloatError> for HttpError {
     #[inline]
     fn from(value: ParseFloatError) -> Self {
         Self::Validation(value.to_string())
     }
 }
 
-impl IntoResponse for OpenAiError {
+impl IntoResponse for HttpError {
     fn into_response(self) -> Response {
         let (status, body) = match self {
             Self::Endpoint(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),

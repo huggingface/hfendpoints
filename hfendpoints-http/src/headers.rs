@@ -4,8 +4,7 @@ use std::borrow::Cow;
 use std::ops::Deref;
 use tracing::error;
 
-static X_REQUEST_ID_NAME: HeaderName = HeaderName::from_static("x-request-id");
-
+pub(crate) static X_REQUEST_ID_NAME: HeaderName = HeaderName::from_static("x-request-id");
 
 /// Holds the value of the x-request-id header used to
 /// correlate request and execution within the server.
@@ -18,7 +17,7 @@ impl Deref for RequestId {
     fn deref(&self) -> &Self::Target {
         match &self.0 {
             Cow::Borrowed(value) => value,
-            Cow::Owned(value) => value.as_str()
+            Cow::Owned(value) => value.as_str(),
         }
     }
 }
@@ -31,16 +30,19 @@ impl Header for RequestId {
     fn decode<'i, I>(values: &mut I) -> Result<Self, Error>
     where
         Self: Sized,
-        I: Iterator<Item=&'i HeaderValue>,
+        I: Iterator<Item = &'i HeaderValue>,
     {
-        let value = values
-            .next()
-            .ok_or_else(headers::Error::invalid)?;
+        let value = values.next().ok_or_else(headers::Error::invalid)?;
 
-        Ok(RequestId(Cow::from(value.to_str().map_err(|err| {
-            error!("Failed to decode x-request-id header: {err}");
-            Error::invalid()
-        })?.to_string())))
+        Ok(RequestId(Cow::from(
+            value
+                .to_str()
+                .map_err(|err| {
+                    error!("Failed to decode x-request-id header: {err}");
+                    Error::invalid()
+                })?
+                .to_string(),
+        )))
     }
 
     fn encode<E: Extend<HeaderValue>>(&self, values: &mut E) {

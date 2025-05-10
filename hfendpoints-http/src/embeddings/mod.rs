@@ -1,9 +1,9 @@
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
-use crate::error::OpenAiError;
+use crate::error::HttpError;
 use crate::headers::RequestId;
-use crate::{Context, OpenAiResult, RequestWithContext};
+use crate::{Context, HttpResult, RequestWithContext};
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -161,7 +161,7 @@ pub async fn embed(
     State(state): State<EndpointContext<EmbeddingRequestWithContext, EmbeddingResponse>>,
     request_id: TypedHeader<RequestId>,
     Json(request): Json<EmbeddingRequest>,
-) -> OpenAiResult<EmbeddingResponse> {
+) -> HttpResult<EmbeddingResponse> {
     // Create request context
     let ctx = Context::new(request_id.0);
 
@@ -170,7 +170,7 @@ pub async fn embed(
     if let Some(response) = egress.recv().await {
         Ok(response?)
     } else {
-        Err(OpenAiError::NoResponse)
+        Err(HttpError::NoResponse)
     }
 }
 
@@ -178,7 +178,7 @@ pub async fn embed(
 /// [OpenAi Platform compatible Transcription endpoint](https://platform.openai.com/docs/api-reference/audio/createTranscription)
 #[derive(Clone)]
 pub struct EmbeddingRouter(
-    pub UnboundedSender<(
+    pub  UnboundedSender<(
         EmbeddingRequestWithContext,
         UnboundedSender<EndpointResult<EmbeddingResponse>>,
     )>,
@@ -194,14 +194,14 @@ impl From<EmbeddingRouter> for OpenApiRouter {
 
 #[cfg(feature = "python")]
 pub(crate) mod python {
-    use pyo3::exceptions::PyIndexError;
-    use pyo3::types::PyList;
     use crate::embeddings::{
-        Embedding, EmbeddingRequest, EmbeddingResponse, EmbeddingResponseTag,
-        EmbeddingRouter, EmbeddingTag, EncodingFormat, MaybeBatched, Usage,
+        Embedding, EmbeddingRequest, EmbeddingResponse, EmbeddingResponseTag, EmbeddingRouter,
+        EmbeddingTag, EncodingFormat, MaybeBatched, Usage,
     };
     use crate::python::{impl_pyendpoint, impl_pyhandler};
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
+    use pyo3::exceptions::PyIndexError;
+    use pyo3::types::PyList;
 
     #[pymethods]
     impl Usage {
@@ -239,15 +239,18 @@ pub(crate) mod python {
 
     #[pymethods]
     impl EmbeddingRequest {
-
         pub fn __len__(&self) -> usize {
             match &self.input {
                 MaybeBatched::Single(_) => 1,
-                MaybeBatched::Batch(items) => items.len()
+                MaybeBatched::Batch(items) => items.len(),
             }
         }
 
-        pub fn __get_item__<'py>(&self, py: Python<'py>, index: usize)-> PyResult<Bound<'py, PyAny>> {
+        pub fn __get_item__<'py>(
+            &self,
+            py: Python<'py>,
+            index: usize,
+        ) -> PyResult<Bound<'py, PyAny>> {
             match &self.input {
                 MaybeBatched::Single(item) => {
                     if index == 0 {
@@ -257,7 +260,9 @@ pub(crate) mod python {
                     }
                 }
                 MaybeBatched::Batch(items) => {
-                    let item = items.get(index).ok_or(PyErr::new::<PyIndexError, _>("index out of range"))?;
+                    let item = items
+                        .get(index)
+                        .ok_or(PyErr::new::<PyIndexError, _>("index out of range"))?;
                     item.into_pyobject(py)
                 }
             }
@@ -294,7 +299,7 @@ pub(crate) mod python {
                 object: EmbeddingResponseTag::List,
                 data: embeddings,
                 model,
-                usage
+                usage,
             }
         }
     }

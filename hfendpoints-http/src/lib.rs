@@ -1,7 +1,7 @@
 use crate::audio::{AUDIO_DESC, AUDIO_TAG};
 use crate::embeddings::{EMBEDDINGS_DESC, EMBEDDINGS_TAG};
-use axum::http::{HeaderName, StatusCode};
-use error::OpenAiError;
+use axum::http::StatusCode;
+use error::HttpError;
 use std::fmt::Debug;
 use std::str::FromStr;
 use std::time::Duration;
@@ -22,9 +22,10 @@ pub(crate) mod embeddings;
 mod error;
 mod headers;
 
+use crate::headers::X_REQUEST_ID_NAME;
 pub use context::Context;
 
-type OpenAiResult<T> = Result<T, OpenAiError>;
+type HttpResult<T> = Result<T, HttpError>;
 type RequestWithContext<I> = (I, Context);
 
 const STATUS_TAG: &str = "Status";
@@ -55,14 +56,11 @@ async fn health() -> StatusCode {
 struct ApiDoc;
 
 #[instrument(skip(task_router))]
-pub async fn serve_openai<A, R>(interface: A, task_router: R) -> OpenAiResult<()>
+pub async fn serve_http<A, R>(interface: A, task_router: R) -> HttpResult<()>
 where
     A: ToSocketAddrs + Debug,
     R: Into<OpenApiRouter>,
 {
-    // Correlation-ID middleware (x-request-id)
-    let x_request_id_header_name = HeaderName::from_static("x-request-id");
-
     // Retrieve the timeout duration from envvar
     let timeout_duration_secs = u64::from_str(
         &std::env::var("HFENDPOINTS_REQUEST_TIMEOUT_SEC").unwrap_or(String::from("120")),
@@ -77,7 +75,7 @@ where
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
                 .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
-                .layer(PropagateRequestIdLayer::new(x_request_id_header_name))
+                .layer(PropagateRequestIdLayer::new(X_REQUEST_ID_NAME.clone()))
                 .layer(TimeoutLayer::new(Duration::from_secs(
                     timeout_duration_secs,
                 ))),
@@ -177,7 +175,7 @@ pub mod python {
 
     macro_rules! impl_pyendpoint {
         ($name: literal, $pyname: ident, $handler: ident, $router: ident) => {
-            use crate::{__path_health, ApiDoc, Context, health, serve_openai};
+            use crate::{__path_health, ApiDoc, Context, health, serve_http};
             use hfendpoints_core::{Endpoint, wait_for_requests};
             use pyo3::exceptions::PyRuntimeError;
             use pyo3::prelude::*;
@@ -210,7 +208,7 @@ pub mod python {
                         &inet_address.0, &inet_address.1
                     );
                     pyo3_async_runtimes::tokio::get_runtime()
-                        .spawn(serve_openai(inet_address, router))
+                        .spawn(serve_http(inet_address, router))
                         .await
                         .inspect_err(|err| {
                             info!("Caught error while serving endpoint: {err}");
