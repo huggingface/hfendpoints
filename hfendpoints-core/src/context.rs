@@ -1,4 +1,5 @@
-use crate::EndpointResult;
+use crate::handler::HandlerError::IpcFailed;
+use crate::{EndpointResult, Error};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 /// Store some information about the context in which the endpoint runs
@@ -16,13 +17,13 @@ impl<I, O> EndpointContext<I, O> {
         Self { ipc }
     }
 
-    pub fn schedule(&self, request: I) -> UnboundedReceiver<EndpointResult<O>> {
+    pub fn schedule(&self, request: I) -> EndpointResult<UnboundedReceiver<EndpointResult<O>>> {
         let (sender, receiver) = unbounded_channel();
         if let Err(e) = self.ipc.send((request, sender)) {
-            panic!("Failed to send to IPC: {e}");
+            return Err(Error::Handler(IpcFailed(e.to_string().into())));
         }
 
-        receiver
+        Ok(receiver)
     }
 
     // ///

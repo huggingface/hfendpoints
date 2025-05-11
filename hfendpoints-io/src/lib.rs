@@ -63,6 +63,15 @@ pub enum MaybeBatched<T> {
 /// assert_eq!(usage.prompt_tokens, 1024);
 /// assert_eq!(usage.total_tokens, 1084);
 /// assert!(usage.prompt_tokens <= usage.total_tokens);
+/// ```
+///
+/// If the two values are the same, you can you `Usage::same` helper factory function
+/// ```
+/// use hfendpoints_io::Usage;
+/// let usage = Usage::same(100);
+/// assert_eq!(usage.prompt_tokens, usage.total_tokens);
+/// assert_eq!(usage.total_tokens, 100);
+/// ```
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Serialize, ToSchema)]
 pub struct Usage {

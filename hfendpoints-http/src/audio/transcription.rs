@@ -400,7 +400,7 @@ pub async fn transcribe(
     let ctx = Context::new(request_id.0);
 
     // Ask for the inference thread to handle it and wait for answers
-    let mut egress = state.schedule((request, ctx));
+    let mut egress = state.schedule((request, ctx))?;
     if let Some(response) = egress.recv().await {
         Ok(response?)
     } else {

@@ -166,7 +166,7 @@ pub async fn embed(
     let ctx = Context::new(request_id.0);
 
     // Ask for the inference thread to handle it and wait for answers
-    let mut egress = state.schedule((request, ctx));
+    let mut egress = state.schedule((request, ctx))?;
     if let Some(response) = egress.recv().await {
         Ok(response?)
     } else {
@@ -175,7 +175,7 @@ pub async fn embed(
 }
 
 /// Helper factory to build
-/// [OpenAi Platform compatible Transcription endpoint](https://platform.openai.com/docs/api-reference/audio/createTranscription)
+/// [HTTP Transcription endpoint](https://platform.openai.com/docs/api-reference/audio/createTranscription)
 #[derive(Clone)]
 pub struct EmbeddingRouter(
     pub  UnboundedSender<(
@@ -509,7 +509,7 @@ mod tests {
         // Spawn a task that sends an error response
         tokio::spawn(async move {
             if let Some((_, sender)) = rx.recv().await {
-                sender.send(Err(Error::TestError("Test error"))).unwrap();
+                sender.send(Err(Error::TestOnly("Test error"))).unwrap();
             }
         });
 

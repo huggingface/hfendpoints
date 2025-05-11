@@ -148,6 +148,7 @@ pub mod python {
                     })
                     .inspect_err(|err| {
                         error!("Failed to retrieve __call__ coroutine: {err}");
+                        Err(Error::Handler(Implementation("Handler is not callable.")))
                     })?;
 
                     pyo3_async_runtimes::tokio::get_runtime()
@@ -232,7 +233,7 @@ pub mod python {
                 #[instrument(skip_all)]
                 async fn _serve_(&self, interface: String, port: u16) -> PyResult<()> {
                     if let Err(err) = self.serve((interface, port)).await {
-                        error!("Caught error while serving Open Ai compatible endpoint: {err}");
+                        error!("Caught error while serving HTTP endpoint: {err}");
                         Err(PyRuntimeError::new_err(err.to_string()))
                     } else {
                         Ok(())
