@@ -1,10 +1,10 @@
-use axum::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
+use axum::Json;
 use axum_extra::TypedHeader;
 use hfendpoints_core::{EndpointContext, EndpointResult, Error};
 use hfendpoints_http::headers::RequestId;
-use hfendpoints_http::{Context, EMBEDDINGS_TAG, HttpError, HttpResult, RequestWithContext};
+use hfendpoints_http::{Context, HttpError, HttpResult, RequestWithContext, EMBEDDINGS_TAG};
 use hfendpoints_io::embedding::{
     EmbeddingInput, EmbeddingParams, EmbeddingRequest, EmbeddingResponse,
 };
@@ -155,8 +155,9 @@ impl From<EmbeddingRouter> for OpenApiRouter {
 impl TryFrom<OpenAiEmbeddingRequest> for EmbeddingRequest {
     type Error = Error;
 
+    #[inline]
     fn try_from(value: OpenAiEmbeddingRequest) -> Result<Self, Self::Error> {
-        Ok(Self::new(value.input, EmbeddingParams::default()))
+        Ok(Self::new(value.input, EmbeddingParams::new(true)))
     }
 }
 
@@ -182,17 +183,17 @@ impl TryFrom<EmbeddingResponse> for OpenAiEmbeddingResponse {
 mod tests {
     use super::*;
     use axum::{
-        Router,
         body::Body,
         http::{self, Request, StatusCode},
         routing::post,
+        Router,
     };
     use hfendpoints_core::Error;
     use http_body_util::BodyExt;
     use hyper::body::Buf;
     use serde_json::json;
     use std::time::Duration;
-    use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
+    use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
     use tower::util::ServiceExt;
     use tower_http::timeout::TimeoutLayer;
 

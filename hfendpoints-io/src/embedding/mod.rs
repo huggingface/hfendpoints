@@ -22,6 +22,12 @@ pub struct EmbeddingParams {
     normalize: bool,
 }
 
+impl EmbeddingParams {
+    pub fn new(normalize: bool) -> Self {
+        Self { normalize }
+    }
+}
+
 /// Represents a request to compute embeddings
 pub type EmbeddingRequest = EndpointRequest<MaybeBatched<EmbeddingInput>, EmbeddingParams>;
 
@@ -85,7 +91,7 @@ pub(crate) mod python {
         ///
         /// Returns: Result<PyEmbeddingResponse, PyErr>
         #[new]
-        fn new<'py>(embeddings: Bound<'py, PyList>, num_tokens: usize) -> PyResult<Self> {
+        fn new(embeddings: Bound<'_, PyList>, num_tokens: usize) -> PyResult<Self> {
             Ok(Self(EndpointResponse {
                 output: embeddings.extract()?,
                 usage: Some(Usage::same(num_tokens)),
@@ -105,7 +111,7 @@ pub(crate) mod python {
         ///
         /// Returns: Result<PyEmbeddingResponse, PyErr>
         #[staticmethod]
-        unsafe fn from_numpy<'py>(
+        unsafe fn from_numpy(
             embeddings: SupportedEmbeddingsArray,
             num_tokens: usize,
         ) -> PyResult<Self> {
@@ -189,7 +195,7 @@ mod tests {
 
     #[test]
     fn test_batched_embedding_request() {
-        let inputs = vec!["text1".to_string(), "text2".to_string()];
+        let inputs = ["text1".to_string(), "text2".to_string()];
         let request = EmbeddingRequest {
             inputs: MaybeBatched::Batched(
                 inputs
@@ -222,7 +228,6 @@ mod tests {
     #[test]
     fn test_embedding_params_clone() {
         let params = EmbeddingParams { normalize: true };
-        let cloned_params = params.clone();
-        assert_eq!(params.normalize, cloned_params.normalize);
+        assert_eq!(params.normalize, params.normalize);
     }
 }
