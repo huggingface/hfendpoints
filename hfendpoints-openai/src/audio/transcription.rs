@@ -4,6 +4,8 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use axum_extra::TypedHeader;
 use hfendpoints_core::{EndpointContext, EndpointResult};
+use hfendpoints_http::headers::RequestId;
+use hfendpoints_http::{Context, HttpError, HttpResult, RequestWithContext, AUDIO_TAG};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tokio::sync::mpsc::UnboundedSender;
@@ -11,11 +13,6 @@ use tracing::instrument;
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
-
-use hfendpoints_http::headers::RequestId;
-use hfendpoints_http::{Context, HttpError, HttpResult, RequestWithContext, AUDIO_TAG};
-#[cfg(feature = "python")]
-use pyo3::prelude::*;
 
 /// One segment of the transcribed text and the corresponding details.
 #[cfg_attr(debug_assertions, derive(Debug))]

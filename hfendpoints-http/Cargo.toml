@@ -7,8 +7,10 @@ edition = "2024"
 axum = { version = "0.8", features = ["multipart", "tracing"] }
 axum-extra = { version = "0.10.1", features = ["typed-header", "tracing"] }
 headers = "0.4.0"
+hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
 hfendpoints-core = { path = "../hfendpoints-core" }
 pyo3 = { workspace = true }
+pyo3-async-runtimes = { version = "0.24", features = ["attributes", "tokio-runtime"] }
 serde = { workspace = true }
 thiserror = "2.0.12"
 tokio = { workspace = true, features = ["net", "parking_lot", "rt-multi-thread"] }
@@ -21,4 +23,4 @@ utoipa-scalar = { version = "0.3.0", features = ["axum"] }
 
 [features]
 default = []
-python = ["hfendpoints-core/python"]
+python = ["hfendpoints-binding-python", "hfendpoints-core/python"]
