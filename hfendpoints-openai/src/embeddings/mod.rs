@@ -1,24 +1,20 @@
+use axum::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use axum_extra::TypedHeader;
-use hfendpoints_core::{EndpointContext, EndpointResult};
+use hfendpoints_core::{EndpointContext, EndpointResult, Error};
 use hfendpoints_http::headers::RequestId;
-use hfendpoints_http::{Context, HttpError, HttpResult, RequestWithContext, EMBEDDINGS_TAG};
+use hfendpoints_http::{Context, EMBEDDINGS_TAG, HttpError, HttpResult, RequestWithContext};
+use hfendpoints_io::embedding::{
+    EmbeddingInput, EmbeddingParams, EmbeddingRequest, EmbeddingResponse,
+};
+use hfendpoints_io::{MaybeBatched, Usage};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::instrument;
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
-
-#[cfg_attr(debug_assertions, derive(Debug))]
-#[cfg_attr(test, derive(Deserialize))]
-#[derive(Copy, Clone, Serialize, ToSchema)]
-pub struct Usage {
-    prompt_tokens: usize,
-    total_tokens: usize,
-}
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(test, derive(Deserialize))]
@@ -72,14 +68,14 @@ enum EmbeddingResponseTag {
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(test, derive(Deserialize))]
 #[derive(Clone, Serialize, ToSchema)]
-pub struct EmbeddingResponse {
+pub struct OpenAiEmbeddingResponse {
     object: EmbeddingResponseTag,
     data: Vec<Embedding>,
     model: String,
     usage: Usage,
 }
 
-impl EmbeddingResponse {
+impl OpenAiEmbeddingResponse {
     pub fn new(data: Vec<Embedding>, model: String, usage: Usage) -> Self {
         Self {
             object: EmbeddingResponseTag::List,
@@ -90,7 +86,7 @@ impl EmbeddingResponse {
     }
 }
 
-impl IntoResponse for EmbeddingResponse {
+impl IntoResponse for OpenAiEmbeddingResponse {
     #[inline]
     fn into_response(self) -> Response {
         Json::from(self).into_response()
@@ -100,28 +96,7 @@ impl IntoResponse for EmbeddingResponse {
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(test, derive(Serialize))]
 #[derive(Clone, Deserialize, ToSchema)]
-#[serde(untagged)]
-pub enum EmbeddingInput {
-    Text(String),
-    Tokens(Vec<u32>),
-}
-
-#[cfg_attr(debug_assertions, derive(Debug))]
-#[cfg_attr(test, derive(Serialize))]
-#[derive(Clone, Deserialize, ToSchema)]
-#[serde(untagged)]
-pub enum MaybeBatched<T>
-where
-    T: Clone + Sized,
-{
-    Single(T),
-    Batch(Vec<T>),
-}
-
-#[cfg_attr(debug_assertions, derive(Debug))]
-#[cfg_attr(test, derive(Serialize))]
-#[derive(Clone, Deserialize, ToSchema)]
-pub struct EmbeddingRequest {
+pub struct OpenAiEmbeddingRequest {
     #[serde(default)]
     encoding_format: EncodingFormat,
     input: MaybeBatched<EmbeddingInput>,
@@ -130,23 +105,23 @@ pub struct EmbeddingRequest {
     user: Option<String>,
 }
 
-type EmbeddingRequestWithContext = RequestWithContext<EmbeddingRequest>;
+type EmbeddingRequestWithContext = RequestWithContext<OpenAiEmbeddingRequest>;
 
 #[utoipa::path(
     post,
     path = "/embeddings",
     tag = EMBEDDINGS_TAG,
-    request_body(content = EmbeddingRequest, content_type = "application/json"),
+    request_body(content = OpenAiEmbeddingRequest, content_type = "application/json"),
     responses(
-        (status = OK, description = "Creates an embedding vector representing the input text.", body = EmbeddingResponse),
+        (status = OK, description = "Creates an embedding vector representing the input text.", body = OpenAiEmbeddingResponse),
     )
 )]
 #[instrument(skip(state, request))]
 pub async fn embed(
-    State(state): State<EndpointContext<EmbeddingRequestWithContext, EmbeddingResponse>>,
+    State(state): State<EndpointContext<EmbeddingRequestWithContext, OpenAiEmbeddingResponse>>,
     request_id: TypedHeader<RequestId>,
-    Json(request): Json<EmbeddingRequest>,
-) -> HttpResult<EmbeddingResponse> {
+    Json(request): Json<OpenAiEmbeddingRequest>,
+) -> HttpResult<OpenAiEmbeddingResponse> {
     // Create request context
     let ctx = Context::new(request_id.0);
 
@@ -165,7 +140,7 @@ pub async fn embed(
 pub struct EmbeddingRouter(
     pub  UnboundedSender<(
         EmbeddingRequestWithContext,
-        UnboundedSender<EndpointResult<EmbeddingResponse>>,
+        UnboundedSender<EndpointResult<OpenAiEmbeddingResponse>>,
     )>,
 );
 
@@ -177,157 +152,47 @@ impl From<EmbeddingRouter> for OpenApiRouter {
     }
 }
 
-// #[cfg(feature = "python")]
-// pub(crate) mod python {
-//     use crate::embeddings::{
-//         Embedding, EmbeddingRequest, EmbeddingResponse, EmbeddingResponseTag, EmbeddingRouter,
-//         EmbeddingTag, EncodingFormat, MaybeBatched, Usage,
-//     };
-//     use crate::python::{impl_pyendpoint, impl_pyhandler};
-//     use hfendpoints_binding_python::ImportablePyModuleBuilder;
-//     use pyo3::exceptions::PyIndexError;
-//     use pyo3::types::PyList;
-//
-//     #[pymethods]
-//     impl Usage {
-//         #[new]
-//         fn py_new(prompt_tokens: usize, total_tokens: usize) -> Self {
-//             Self {
-//                 prompt_tokens,
-//                 total_tokens,
-//             }
-//         }
-//
-//         #[getter]
-//         fn prompt_tokens(&self) -> usize {
-//             self.prompt_tokens
-//         }
-//
-//         #[getter]
-//         fn total_tokens(&self) -> usize {
-//             self.total_tokens
-//         }
-//     }
-//
-//     #[pymethods]
-//     impl Embedding {
-//         #[new]
-//         #[pyo3(signature = (index, embedding))]
-//         fn py_new(index: u32, embedding: Bound<PyList>) -> PyResult<Self> {
-//             Ok(Self {
-//                 object: EmbeddingTag::Embedding,
-//                 index: index as usize,
-//                 embedding: embedding.extract::<Vec<f32>>()?,
-//             })
-//         }
-//     }
-//
-//     #[pymethods]
-//     impl EmbeddingRequest {
-//         pub fn __len__(&self) -> usize {
-//             match &self.input {
-//                 MaybeBatched::Single(_) => 1,
-//                 MaybeBatched::Batch(items) => items.len(),
-//             }
-//         }
-//
-//         pub fn __get_item__<'py>(
-//             &self,
-//             py: Python<'py>,
-//             index: usize,
-//         ) -> PyResult<Bound<'py, PyAny>> {
-//             match &self.input {
-//                 MaybeBatched::Single(item) => {
-//                     if index == 0 {
-//                         item.into_pyobject(py)
-//                     } else {
-//                         Err(PyErr::new::<PyIndexError, _>("index out of range"))
-//                     }
-//                 }
-//                 MaybeBatched::Batch(items) => {
-//                     let item = items
-//                         .get(index)
-//                         .ok_or(PyErr::new::<PyIndexError, _>("index out of range"))?;
-//                     item.into_pyobject(py)
-//                 }
-//             }
-//         }
-//
-//         #[getter]
-//         pub fn encoding_format(&self) -> EncodingFormat {
-//             self.encoding_format
-//         }
-//
-//         #[getter]
-//         pub fn is_batched(&self) -> bool {
-//             match self.input {
-//                 MaybeBatched::Single(_) => false,
-//                 MaybeBatched::Batch(_) => true,
-//             }
-//         }
-//
-//         #[getter]
-//         pub fn input<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-//             match &self.input {
-//                 MaybeBatched::Single(item) => item.into_pyobject(py),
-//                 MaybeBatched::Batch(items) => items.into_pyobject(py),
-//             }
-//         }
-//     }
-//
-//     #[pymethods]
-//     impl EmbeddingResponse {
-//         #[new]
-//         #[pyo3(signature = (model, embeddings, usage))]
-//         fn py_new(model: String, embeddings: Vec<Embedding>, usage: Usage) -> Self {
-//             Self {
-//                 object: EmbeddingResponseTag::List,
-//                 data: embeddings,
-//                 model,
-//                 usage,
-//             }
-//         }
-//     }
+impl TryFrom<OpenAiEmbeddingRequest> for EmbeddingRequest {
+    type Error = Error;
 
-// impl_pyhandler!(EmbeddingRequest, EmbeddingResponse);
-// impl_pyendpoint!(
-//     "EmbeddingEndpoint",
-//     PyEmbeddingEndpoint,
-//     PyHandler,
-//     EmbeddingRouter
-// );
+    fn try_from(value: OpenAiEmbeddingRequest) -> Result<Self, Self::Error> {
+        Ok(Self::new(value.input, EmbeddingParams::default()))
+    }
+}
 
-// Bind hfendpoints.openai.embeddings submodule into the exported Python wheel
-// pub fn bind<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
-//     let module = ImportablePyModuleBuilder::new(py, name)?
-//         .defaults()?
-//         .add_class::<Embedding>()?
-//         .add_class::<EncodingFormat>()?
-//         .add_class::<EmbeddingRequest>()?
-//         .add_class::<EmbeddingResponse>()?
-//         .add_class::<PyEmbeddingEndpoint>()?
-//         .add_class::<Usage>()?
-//         .finish();
-//
-//     Ok(module)
-// }
-// }
+impl TryFrom<EmbeddingResponse> for OpenAiEmbeddingResponse {
+    type Error = Error;
+
+    fn try_from(value: EmbeddingResponse) -> Result<Self, Self::Error> {
+        let usage = value.usage.unwrap_or_default();
+        let embeddings = match value.output {
+            MaybeBatched::Single(item) => vec![Embedding::new(0, item)],
+            MaybeBatched::Batched(items) => items
+                .into_iter()
+                .enumerate()
+                .map(|(index, item)| Embedding::new(index, item))
+                .collect(),
+        };
+
+        Ok(Self::new(embeddings, String::new(), usage))
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use axum::{
+        Router,
         body::Body,
         http::{self, Request, StatusCode},
         routing::post,
-        Router,
     };
     use hfendpoints_core::Error;
     use http_body_util::BodyExt;
     use hyper::body::Buf;
     use serde_json::json;
     use std::time::Duration;
-    use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
+    use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
     use tower::util::ServiceExt;
     use tower_http::timeout::TimeoutLayer;
 
@@ -335,7 +200,7 @@ mod tests {
     fn create_test_app(
         sender: UnboundedSender<(
             EmbeddingRequestWithContext,
-            UnboundedSender<Result<EmbeddingResponse, Error>>,
+            UnboundedSender<EndpointResult<OpenAiEmbeddingResponse>>,
         )>,
     ) -> Router {
         let state = EndpointContext::new(sender);
@@ -351,8 +216,8 @@ mod tests {
         let (tx, mut rx) = unbounded_channel();
         let app = create_test_app(tx);
 
-        // Create test request
-        let request = EmbeddingRequest {
+        // Create a test request
+        let request = OpenAiEmbeddingRequest {
             input: MaybeBatched::Single(EmbeddingInput::Text(String::from("test text"))),
             model: Some("test-model".into()),
             dimension: None,
@@ -360,8 +225,8 @@ mod tests {
             user: None,
         };
 
-        // Create test response
-        let response = EmbeddingResponse {
+        // Create a test response
+        let response = OpenAiEmbeddingResponse {
             object: EmbeddingResponseTag::List,
             data: vec![Embedding {
                 embedding: vec![0.1, 0.2, 0.3],
@@ -397,7 +262,8 @@ mod tests {
 
         // Verify response body
         let body = response.collect().await.unwrap().aggregate();
-        let response_json: EmbeddingResponse = serde_json::from_reader(body.reader()).unwrap();
+        let response_json: OpenAiEmbeddingResponse =
+            serde_json::from_reader(body.reader()).unwrap();
         assert_eq!(response_json.model, "test-model");
         assert_eq!(response_json.data.len(), 1);
     }
@@ -476,7 +342,7 @@ mod tests {
         let (tx, mut rx) = unbounded_channel();
         let app = create_test_app(tx);
 
-        let request = EmbeddingRequest {
+        let request = OpenAiEmbeddingRequest {
             input: MaybeBatched::Single(EmbeddingInput::Text("test text".into())),
             model: Some("test-model".into()),
             dimension: None,
@@ -501,5 +367,101 @@ mod tests {
 
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn test_embedding_response_to_openai_conversion_single() {
+        // Test single embedding conversion
+        let single_response = EmbeddingResponse {
+            output: MaybeBatched::Single(vec![0.1, 0.2, 0.3]),
+            usage: Some(Usage::new(1, 2)),
+        };
+
+        let converted = OpenAiEmbeddingResponse::try_from(single_response).unwrap();
+        assert_eq!(converted.data.len(), 1);
+        assert_eq!(converted.data[0].embedding, vec![0.1, 0.2, 0.3]);
+        assert_eq!(converted.data[0].index, 0);
+        assert_eq!(converted.usage.prompt_tokens, 1);
+        assert_eq!(converted.usage.total_tokens, 2);
+
+        // Test usage conversion
+        let response_without_usage = EmbeddingResponse {
+            output: MaybeBatched::Single(vec![0.1]),
+            usage: None,
+        };
+
+        let converted = OpenAiEmbeddingResponse::try_from(response_without_usage).unwrap();
+        assert_eq!(converted.data.len(), 1);
+        assert_eq!(converted.data[0].embedding, vec![0.1]);
+        assert_eq!(converted.data[0].index, 0);
+        assert_eq!(converted.usage.prompt_tokens, 0);
+        assert_eq!(converted.usage.total_tokens, 0);
+    }
+
+    #[test]
+    fn test_embedding_response_to_openai_conversion_single_no_usage() {
+        // Test single embedding conversion
+        let response_without_usage = EmbeddingResponse {
+            output: MaybeBatched::Single(vec![0.1]),
+            usage: None,
+        };
+
+        let converted = OpenAiEmbeddingResponse::try_from(response_without_usage).unwrap();
+        assert_eq!(converted.data.len(), 1);
+        assert_eq!(converted.data[0].embedding, vec![0.1]);
+        assert_eq!(converted.data[0].index, 0);
+        assert_eq!(converted.usage.prompt_tokens, 0);
+        assert_eq!(converted.usage.total_tokens, 0);
+    }
+
+    #[test]
+    fn test_embedding_response_to_openai_conversion_batched() {
+        // Test batched embeddings conversion
+        let batched_response = EmbeddingResponse {
+            output: MaybeBatched::Batched(vec![vec![0.1, 0.2], vec![0.3, 0.4]]),
+            usage: Some(Usage::new(2, 3)),
+        };
+
+        let converted = OpenAiEmbeddingResponse::try_from(batched_response).unwrap();
+        assert_eq!(converted.data.len(), 2);
+        assert_eq!(converted.data[0].embedding, vec![0.1, 0.2]);
+        assert_eq!(converted.data[0].index, 0);
+        assert_eq!(converted.data[1].embedding, vec![0.3, 0.4]);
+        assert_eq!(converted.data[1].index, 1);
+        assert_eq!(converted.usage.prompt_tokens, 2);
+        assert_eq!(converted.usage.total_tokens, 3);
+
+        // Test usage conversion
+        let response_without_usage = EmbeddingResponse {
+            output: MaybeBatched::Batched(vec![vec![0.1, 0.2], vec![0.3, 0.4]]),
+            usage: None,
+        };
+
+        let converted = OpenAiEmbeddingResponse::try_from(response_without_usage).unwrap();
+        assert_eq!(converted.data.len(), 2);
+        assert_eq!(converted.data[0].embedding, vec![0.1, 0.2]);
+        assert_eq!(converted.data[0].index, 0);
+        assert_eq!(converted.data[1].embedding, vec![0.3, 0.4]);
+        assert_eq!(converted.data[1].index, 1);
+        assert_eq!(converted.usage.prompt_tokens, 0);
+        assert_eq!(converted.usage.total_tokens, 0);
+    }
+
+    #[test]
+    fn test_embedding_response_to_openai_conversion_batched_no_usage() {
+        // Test batched embeddings conversion
+        let response_without_usage = EmbeddingResponse {
+            output: MaybeBatched::Batched(vec![vec![0.1, 0.2], vec![0.3, 0.4]]),
+            usage: None,
+        };
+
+        let converted = OpenAiEmbeddingResponse::try_from(response_without_usage).unwrap();
+        assert_eq!(converted.data.len(), 2);
+        assert_eq!(converted.data[0].embedding, vec![0.1, 0.2]);
+        assert_eq!(converted.data[0].index, 0);
+        assert_eq!(converted.data[1].embedding, vec![0.3, 0.4]);
+        assert_eq!(converted.data[1].index, 1);
+        assert_eq!(converted.usage.prompt_tokens, 0);
+        assert_eq!(converted.usage.total_tokens, 0);
     }
 }

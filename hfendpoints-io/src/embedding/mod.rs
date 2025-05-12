@@ -1,6 +1,20 @@
 use crate::{EndpointRequest, EndpointResponse, MaybeBatched, Usage};
 use hfendpoints_core::Handler;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+
+#[cfg(feature = "python")]
+use pyo3::prelude::IntoPyObjectRef;
+
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg_attr(feature = "python", derive(IntoPyObjectRef))]
+#[derive(Clone, Deserialize, Serialize, ToSchema)]
+#[serde(untagged)]
+#[derive(PartialEq)]
+pub enum EmbeddingInput {
+    Text(String),
+    Tokens(Vec<u32>),
+}
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Copy, Clone, Default, ToSchema)]
@@ -9,7 +23,7 @@ pub struct EmbeddingParams {
 }
 
 /// Represents a request to compute embeddings
-pub type EmbeddingRequest = EndpointRequest<MaybeBatched<String>, EmbeddingParams>;
+pub type EmbeddingRequest = EndpointRequest<MaybeBatched<EmbeddingInput>, EmbeddingParams>;
 
 /// Represent a response to
 pub type EmbeddingResponse = EndpointResponse<MaybeBatched<Vec<f32>>, Usage>;
@@ -160,12 +174,15 @@ mod tests {
     fn test_single_embedding_request() {
         let input = "test text".to_string();
         let request = EmbeddingRequest {
-            inputs: MaybeBatched::Single(input.clone()),
+            inputs: MaybeBatched::Single(EmbeddingInput::Text(input.clone())),
             parameters: EmbeddingParams::default(),
         };
 
         match request.inputs {
-            MaybeBatched::Single(text) => assert_eq!(text, input),
+            MaybeBatched::Single(text) => match text {
+                EmbeddingInput::Text(text) => assert_eq!(text, input),
+                _ => panic!("Expected Text variant"),
+            },
             _ => panic!("Expected Single variant"),
         }
     }
@@ -174,14 +191,23 @@ mod tests {
     fn test_batched_embedding_request() {
         let inputs = vec!["text1".to_string(), "text2".to_string()];
         let request = EmbeddingRequest {
-            inputs: MaybeBatched::Batched(inputs.clone()),
+            inputs: MaybeBatched::Batched(
+                inputs
+                    .iter()
+                    .map(|item| EmbeddingInput::Text(item.clone()))
+                    .collect(),
+            ),
             parameters: EmbeddingParams::default(),
         };
 
-        match request.inputs {
-            MaybeBatched::Batched(texts) => assert_eq!(texts, inputs),
-            _ => panic!("Expected Batched variant"),
-        }
+        let inputs = MaybeBatched::Batched(
+            inputs
+                .iter()
+                .map(|item| EmbeddingInput::Text(item.clone()))
+                .collect(),
+        );
+
+        assert_eq!(request.inputs, inputs)
     }
 
     #[test]

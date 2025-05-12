@@ -18,8 +18,9 @@ pub mod embedding;
 /// ```
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(feature = "python", derive(FromPyObject))]
-#[derive(Deserialize, ToSchema)]
+#[derive(Clone, Deserialize, Serialize, ToSchema)]
 #[serde(untagged)]
+#[derive(PartialEq)]
 pub enum MaybeBatched<T> {
     /// Single element
     Single(T),
@@ -73,7 +74,7 @@ pub enum MaybeBatched<T> {
 /// assert_eq!(usage.total_tokens, 100);
 /// ```
 #[cfg_attr(debug_assertions, derive(Debug))]
-#[derive(Serialize, ToSchema)]
+#[derive(Copy, Clone, Deserialize, Serialize, ToSchema)]
 pub struct Usage {
     /// Number of tokens included in the prompt after the tokenization process
     pub prompt_tokens: usize,
@@ -82,18 +83,13 @@ pub struct Usage {
     pub total_tokens: usize,
 }
 
-impl Usage {
+impl Default for Usage {
     #[inline]
-    pub fn new(prompt_tokens: usize, total_tokens: usize) -> Self {
-        Self {
-            prompt_tokens,
-            total_tokens,
+    fn default() -> Self {
+        Usage {
+            prompt_tokens: 0,
+            total_tokens: 0,
         }
-    }
-
-    #[inline]
-    pub fn same(tokens: usize) -> Self {
-        Self::new(tokens, tokens)
     }
 }
 
@@ -107,6 +103,62 @@ impl Display for Usage {
     }
 }
 
+impl Usage {
+    /// Creates a new instance of the `Usage` struct with the specified number of
+    /// prompt tokens and total tokens.
+    ///
+    /// # Arguments
+    ///
+    /// * `prompt_tokens` - A `usize` value representing the number of tokens used in the prompt.
+    /// * `total_tokens` - A `usize` value representing the total number of tokens used.
+    ///
+    /// # Returns
+    ///
+    /// A new instance of the `Usage` struct initialized with the provided token counts.
+    ///
+    /// # Example
+    /// ```
+    /// use hfendpoints_io::Usage;
+    ///
+    /// let usage = Usage::new(100, 128);
+    /// assert_eq!(usage.prompt_tokens, 100);
+    /// assert_eq!(usage.total_tokens, 128);
+    /// ```
+    pub fn new(prompt_tokens: usize, total_tokens: usize) -> Self {
+        Usage {
+            prompt_tokens,
+            total_tokens,
+        }
+    }
+
+    /// Creates a new `Usage` instance with the same value for `prompt_tokens` and `total_tokens`.
+    ///
+    /// # Parameters
+    /// - `num_tokens` (usize): The number of tokens to be assigned to both `prompt_tokens` and `total_tokens`.
+    ///
+    /// # Returns
+    /// - `Self`: A new `Usage` instance with `prompt_tokens` and `total_tokens` set to `num_tokens`.
+    ///
+    /// # Inline
+    /// This function is marked as `#[inline]` to suggest to the compiler that it might be beneficial to inline it for performance reasons.
+    ///
+    /// # Example
+    /// ```
+    /// use hfendpoints_io::Usage;
+    ///
+    /// let usage = Usage::same(100);
+    /// assert_eq!(usage.prompt_tokens, 100);
+    /// assert_eq!(usage.total_tokens, 100);
+    /// ```
+    #[inline]
+    pub fn same(num_tokens: usize) -> Self {
+        Usage {
+            prompt_tokens: num_tokens,
+            total_tokens: num_tokens,
+        }
+    }
+}
+
 /// Generic request representation for endpoints
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Deserialize, ToSchema)]
@@ -116,7 +168,7 @@ where
     P: ToSchema,
 {
     /// Main processing input to feed through the inference engine
-    inputs: I,
+    pub inputs: I,
 
     /// Contains all the parameters to tune the inference engine
     parameters: P,
@@ -132,10 +184,21 @@ where
 {
     /// Resulting output from the API call
     #[serde(flatten)]
-    output: O,
+    pub output: O,
 
     /// Provide optional information about the underlying resources usage for this API call
-    usage: Option<U>,
+    pub usage: Option<U>,
+}
+
+impl<I, P> EndpointRequest<I, P>
+where
+    I: ToSchema,
+    P: ToSchema,
+{
+    #[inline]
+    pub fn new(inputs: I, parameters: P) -> Self {
+        Self { inputs, parameters }
+    }
 }
 
 #[cfg(feature = "python")]
