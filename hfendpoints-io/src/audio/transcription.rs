@@ -108,22 +108,20 @@ pub(crate) mod python {
             prompt_tokens: Option<usize>,
             total_tokens: Option<usize>,
         ) -> Self {
-            Self {
-                0: TranscriptionResponse {
-                    output: match segments {
-                        None => Transcription::Text(text),
-                        Some(segments) => {
-                            Transcription::Detailed(DetailedTranscription { text, segments })
-                        }
-                    },
-                    usage: match (prompt_tokens, total_tokens) {
-                        (None, None) => None,
-                        (Some(prompt), None) => Some(Usage::same(prompt)),
-                        (None, Some(total)) => Some(Usage::new(0, total)),
-                        (Some(prompt), Some(total)) => Some(Usage::new(prompt, total)),
-                    },
+            Self(TranscriptionResponse {
+                output: match segments {
+                    None => Transcription::Text(text),
+                    Some(segments) => {
+                        Transcription::Detailed(DetailedTranscription { text, segments })
+                    }
                 },
-            }
+                usage: match (prompt_tokens, total_tokens) {
+                    (None, None) => None,
+                    (Some(prompt), None) => Some(Usage::same(prompt)),
+                    (None, Some(total)) => Some(Usage::new(0, total)),
+                    (Some(prompt), Some(total)) => Some(Usage::new(prompt, total)),
+                },
+            })
         }
 
         fn __repr__(&self) -> String {

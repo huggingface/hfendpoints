@@ -125,9 +125,15 @@ impl TryFromEnv for Timeout {
 }
 
 /// Helper trait implementation to convert an environment extracted Timeout to `tower_http::timeout::service::TimeoutLayer`
-impl Into<TimeoutLayer> for Timeout {
-    fn into(self) -> TimeoutLayer {
-        TimeoutLayer::new(self.duration)
+// impl Into<TimeoutLayer> for Timeout {
+//     fn into(self) -> TimeoutLayer {
+//         TimeoutLayer::new(self.duration)
+//     }
+// }
+
+impl From<Timeout> for TimeoutLayer {
+    fn from(value: Timeout) -> Self {
+        TimeoutLayer::new(value.duration)
     }
 }
 

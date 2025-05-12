@@ -9,7 +9,7 @@ pub enum EnvironmentError {
     MissingEnvVar(String),
 
     #[error(
-        "Found evironment variable {0} but validation failed: {1}. Please fix this variable and relaunch the application."
+        "Found environment variable {0} but validation failed: {1}. Please fix this variable and relaunch the application."
     )]
     InvalidEnvVar(Cow<'static, str>, String),
 }

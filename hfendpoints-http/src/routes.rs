@@ -22,8 +22,8 @@ async fn health() -> StatusCode {
 pub struct StatusRouter;
 
 /// Convert the underlying `StatusRouter` to one compatible with `utoipa_axum::router::OpenApiRouter`
-impl Into<OpenApiRouter> for StatusRouter {
-    fn into(self) -> OpenApiRouter {
-        OpenApiRouter::new().routes(routes!(health)).into()
+impl From<StatusRouter> for OpenApiRouter {
+    fn from(_: StatusRouter) -> Self {
+        OpenApiRouter::new().routes(routes!(health))
     }
 }

@@ -3,15 +3,9 @@ use hfendpoints_core::Handler;
 use utoipa::ToSchema;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
-#[derive(Copy, Clone, ToSchema)]
+#[derive(Copy, Clone, Default, ToSchema)]
 pub struct EmbeddingParams {
     normalize: bool,
-}
-
-impl Default for EmbeddingParams {
-    fn default() -> Self {
-        Self { normalize: false }
-    }
 }
 
 /// Represents a request to compute embeddings
@@ -43,7 +37,6 @@ pub(crate) mod python {
 
     #[pymethods]
     impl PyEmbeddingRequest {
-        ///
         #[getter]
         fn inputs<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
             match &self.0.inputs {
@@ -79,12 +72,10 @@ pub(crate) mod python {
         /// Returns: Result<PyEmbeddingResponse, PyErr>
         #[new]
         fn new<'py>(embeddings: Bound<'py, PyList>, num_tokens: usize) -> PyResult<Self> {
-            Ok(Self {
-                0: EndpointResponse {
-                    output: embeddings.extract()?,
-                    usage: Some(Usage::same(num_tokens)),
-                },
-            })
+            Ok(Self(EndpointResponse {
+                output: embeddings.extract()?,
+                usage: Some(Usage::same(num_tokens)),
+            }))
         }
 
         /// Create an EmbeddingResponse by pointing the internal Rust heap-allocated Vec to
@@ -122,12 +113,10 @@ pub(crate) mod python {
                 }
             };
 
-            Ok(Self {
-                0: EndpointResponse {
-                    output,
-                    usage: Some(Usage::same(num_tokens)),
-                },
-            })
+            Ok(Self(EndpointResponse {
+                output,
+                usage: Some(Usage::same(num_tokens)),
+            }))
         }
 
         fn __repr__(&self) -> String {
@@ -138,7 +127,7 @@ pub(crate) mod python {
                 MaybeBatched::Batched(batched) => format!(
                     "EmbeddingResponse(<{}x{}xf32>)",
                     batched.len(),
-                    batched.get(0).map_or(0, |item| item.len())
+                    batched.first().map_or(0, |item| item.len())
                 ),
             }
         }

@@ -44,7 +44,7 @@ where
     R: Into<OpenApiRouter>,
 {
     // Retrieve the timeout duration from envvar
-    let timeout = Timeout::try_from_env().map_err(|err| Error::Environment(err))?;
+    let timeout = Timeout::try_from_env().map_err(Error::Environment)?;
 
     // Default routes
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
@@ -54,9 +54,9 @@ where
                 .layer(TraceLayer::new_for_http())
                 .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
                 .layer(PropagateRequestIdLayer::new(X_REQUEST_ID_NAME.clone()))
-                .layer::<TimeoutLayer>(timeout.into()),
+                .layer(TimeoutLayer::from(timeout)),
         )
-        .merge(StatusRouter::default().into())
+        .merge(StatusRouter.into())
         .split_for_parts();
 
     // Documentation route
@@ -213,12 +213,13 @@ pub mod python {
         };
     }
 
+    // `TaskLocal` keeps track of the asynchronous computations being run globally for the whole tokio-spawned threads
     pub(crate) static TASK_LOCALS: OnceCell<TaskLocals> = OnceCell::const_new();
 
     pub async fn serve(endpoint: PyObject, interface: String, port: u16) -> PyResult<()> {
         let locals = TASK_LOCALS
             .get_or_try_init(|| async {
-                Python::with_gil(|py| pyo3_async_runtimes::tokio::get_current_locals(py))
+                Python::with_gil(pyo3_async_runtimes::tokio::get_current_locals)
             })
             .await?;
 
@@ -226,7 +227,7 @@ pub mod python {
             let coro = endpoint
                 .bind(py)
                 .call_method1("_serve_", (interface, port))?;
-            pyo3_async_runtimes::into_future_with_locals(&locals, coro)
+            pyo3_async_runtimes::into_future_with_locals(locals, coro)
         })?
         .await?;
         Ok(())
