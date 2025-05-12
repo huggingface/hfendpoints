@@ -1,7 +1,3 @@
-use crate::audio::AUDIO_TAG;
-use crate::context::Context;
-use crate::headers::RequestId;
-use crate::{HttpError, HttpResult, RequestWithContext};
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Multipart, State};
 use axum::response::{IntoResponse, Response};
@@ -16,11 +12,12 @@ use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
+use hfendpoints_http::headers::RequestId;
+use hfendpoints_http::{Context, HttpError, HttpResult, RequestWithContext, AUDIO_TAG};
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
 /// One segment of the transcribed text and the corresponding details.
-#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 pub struct Segment {
@@ -157,8 +154,7 @@ impl Segment {
     }
 }
 
-/// Represents a transcription response returned by model, based on the provided input.
-#[cfg_attr(feature = "python", pyclass(frozen))]
+/// Represents a transcription response returned by the model, based on the provided input.
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 pub struct Transcription {
@@ -166,8 +162,7 @@ pub struct Transcription {
     text: String,
 }
 
-/// Represents a verbose json transcription response returned by model, based on the provided input.
-#[cfg_attr(feature = "python", pyclass(frozen))]
+/// Represents a verbose JSON transcription response returned by the model, based on the provided input.
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 pub struct VerboseTranscription {
@@ -184,7 +179,6 @@ pub struct VerboseTranscription {
     segments: Vec<Segment>,
 }
 
-#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 #[serde(tag = "type")]
@@ -195,7 +189,6 @@ pub struct Delta {
     // TODO: logprobs -> https://platform.openai.com/docs/api-reference/audio/transcript-text-delta-event#audio/transcript-text-delta-event-logprobs
 }
 
-#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 #[serde(tag = "type")]
@@ -206,7 +199,6 @@ pub struct Done {
     // TODO: logprobs -> https://platform.openai.com/docs/api-reference/audio/transcript-text-done-event#audio/transcript-text-done-event-logprobs
 }
 
-#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 #[serde(untagged)]
@@ -222,7 +214,6 @@ pub enum StreamEvent {
     Done(Done),
 }
 
-#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Copy, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -239,8 +230,7 @@ impl Default for ResponseFormat {
     }
 }
 
-/// The transcription object, a verbose transcription object or a stream of transcript events.
-#[cfg_attr(feature = "python", pyclass(frozen))]
+/// The transcription object, a verbose transcription object, or a stream of transcript events.
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 pub enum TranscriptionResponse {
@@ -270,7 +260,7 @@ struct TranscriptionForm {
     file: String,
 
     /// The language of the input audio.
-    /// Supplying the input language in ISO-639-1 (e.g. en) format will improve accuracy and latency.
+    /// Supplying the input language in ISO-639-1 (eg. en) format will improve accuracy and latency.
     language: Option<String>,
 
     /// Not used, here for compatibility purpose with OpenAI Platform
@@ -289,7 +279,6 @@ struct TranscriptionForm {
     response_format: Option<ResponseFormat>,
 }
 
-#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone)]
 pub struct TranscriptionRequest {
@@ -424,147 +413,6 @@ impl From<TranscriptionRouter> for OpenApiRouter {
             .routes(routes!(transcribe))
             .with_state(EndpointContext::new(value.0))
             .layer(DefaultBodyLimit::max(200 * 1024 * 1024)) // 200Mb as OpenAI
-    }
-}
-
-#[cfg(feature = "python")]
-pub(crate) mod python {
-    use crate::audio::transcription::{
-        ResponseFormat, Segment, Transcription, TranscriptionRequest, TranscriptionResponse,
-        VerboseTranscription,
-    };
-    use hfendpoints_binding_python::fill_view_from_readonly_data;
-    use pyo3::ffi::Py_buffer;
-    use pyo3::prelude::*;
-    use std::ffi::CString;
-    use tracing::{debug, instrument};
-
-    #[pyclass(frozen, eq, eq_int)]
-    #[derive(Eq, PartialEq)]
-    pub enum TranscriptionResponseKind {
-        #[pyo3(name = "TEXT")]
-        Text = 1,
-
-        #[pyo3(name = "JSON")]
-        Json = 2,
-
-        #[pyo3(name = "VERBOSE_JSON")]
-        VerboseJson = 3,
-    }
-
-    #[pymethods]
-    impl Segment {
-        #[new]
-        pub fn new(
-            id: u16,
-            start: f32,
-            end: f32,
-            seek: u16,
-            temperature: f32,
-            text: String,
-            tokens: Vec<u32>,
-            avg_logprob: f32,
-            compression_ratio: f32,
-            no_speech_prob: f32,
-        ) -> PyResult<Self> {
-            Ok(Self {
-                id,
-                start,
-                end,
-                seek,
-                temperature,
-                text,
-                tokens,
-                avg_logprob,
-                compression_ratio,
-                no_speech_prob,
-            })
-        }
-    }
-
-    #[pymethods]
-    impl Transcription {
-        #[new]
-        pub fn new(text: String) -> Self {
-            Self { text }
-        }
-    }
-
-    #[pymethods]
-    impl VerboseTranscription {
-        #[new]
-        pub fn new(text: String, duration: f32, language: String, segments: Vec<Segment>) -> Self {
-            Self {
-                text,
-                duration,
-                language,
-                segments,
-            }
-        }
-    }
-
-    #[pymethods]
-    impl TranscriptionRequest {
-        #[instrument(skip(slf, buffer))]
-        pub unsafe fn __getbuffer__(
-            slf: Bound<'_, Self>,
-            buffer: *mut Py_buffer,
-            flags: i32,
-        ) -> PyResult<()> {
-            debug!("Acquiring a memoryview over audio data (flags={})", flags);
-            unsafe {
-                fill_view_from_readonly_data(buffer, flags, &slf.borrow().file, slf.into_any())
-            }
-        }
-
-        #[instrument(skip_all)]
-        pub unsafe fn __releasebuffer__(&self, buffer: *mut Py_buffer) {
-            debug!("Releasing Python memoryview");
-            // Release memory held by the format string
-            drop(unsafe { CString::from_raw((*buffer).format) });
-        }
-
-        #[getter]
-        pub fn language(&self) -> &str {
-            &self.language
-        }
-
-        #[getter]
-        pub fn prompt(&self) -> &Option<String> {
-            &self.prompt
-        }
-
-        #[getter]
-        pub fn temperature(&self) -> f32 {
-            self.temperature
-        }
-
-        #[getter]
-        pub fn response_kind(&self) -> PyResult<TranscriptionResponseKind> {
-            match self.response_format {
-                ResponseFormat::Json => Ok(TranscriptionResponseKind::Json),
-                ResponseFormat::Text => Ok(TranscriptionResponseKind::Text),
-                ResponseFormat::VerboseJson => Ok(TranscriptionResponseKind::VerboseJson),
-            }
-        }
-    }
-
-    #[pymethods]
-    impl TranscriptionResponse {
-        #[staticmethod]
-        fn text(content: String) -> Self {
-            Self::Text(content)
-        }
-
-        #[staticmethod]
-        fn json(content: String) -> Self {
-            Self::Json(Transcription { text: content })
-        }
-
-        #[staticmethod]
-        fn verbose(transcription: VerboseTranscription) -> Self {
-            Self::VerboseJson(transcription)
-        }
     }
 }
 

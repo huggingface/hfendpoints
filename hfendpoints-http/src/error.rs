@@ -37,8 +37,8 @@ impl IntoResponse for HttpError {
         let (status, body) = match self {
             Self::Endpoint(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
             Self::Io(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+            Self::Validation(e) => (StatusCode::BAD_REQUEST, e),
             Self::Multipart(e) => (StatusCode::BAD_REQUEST, e.to_string()),
-            Self::Validation(e) => (StatusCode::FORBIDDEN, e),
             Self::NoResponse => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 String::from("No response returned by the inference engine"),

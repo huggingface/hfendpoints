@@ -1,14 +1,10 @@
-#[cfg(feature = "python")]
-use pyo3::prelude::*;
-
-use crate::error::HttpError;
-use crate::headers::RequestId;
-use crate::{Context, HttpResult, RequestWithContext};
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use axum_extra::TypedHeader;
-use hfendpoints_core::{EndpointContext, EndpointResult, Error};
+use hfendpoints_core::{EndpointContext, EndpointResult};
+use hfendpoints_http::headers::RequestId;
+use hfendpoints_http::{Context, HttpError, HttpResult, RequestWithContext, EMBEDDINGS_TAG};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::instrument;
@@ -16,10 +12,6 @@ use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
-pub const EMBEDDINGS_TAG: &str = "Embeddings";
-pub const EMBEDDINGS_DESC: &str = "Get a vector representation of a given input that can be easily consumed by machine learning models and algorithms.";
-
-#[cfg_attr(feature = "python", pyclass)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(test, derive(Deserialize))]
 #[derive(Copy, Clone, Serialize, ToSchema)]
@@ -29,7 +21,6 @@ pub struct Usage {
 }
 
 #[cfg_attr(debug_assertions, derive(Debug))]
-#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(test, derive(Deserialize))]
 #[derive(Clone, Serialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
@@ -38,7 +29,6 @@ enum EmbeddingTag {
 }
 
 #[cfg_attr(debug_assertions, derive(Debug))]
-#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(test, derive(Deserialize))]
 #[derive(Clone, Serialize, ToSchema)]
 pub struct Embedding {
@@ -58,7 +48,6 @@ impl Embedding {
 }
 
 #[cfg_attr(debug_assertions, derive(Debug))]
-#[cfg_attr(feature = "python", pyclass(frozen, eq, eq_int))]
 #[derive(Clone, Copy, Deserialize, Serialize, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum EncodingFormat {
@@ -72,7 +61,6 @@ impl Default for EncodingFormat {
     }
 }
 
-#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(test, derive(Deserialize))]
 #[derive(Copy, Clone, Serialize, ToSchema)]
@@ -81,7 +69,6 @@ enum EmbeddingResponseTag {
     List,
 }
 
-#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(test, derive(Deserialize))]
 #[derive(Clone, Serialize, ToSchema)]
@@ -112,7 +99,6 @@ impl IntoResponse for EmbeddingResponse {
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(test, derive(Serialize))]
-#[cfg_attr(feature = "python", derive(IntoPyObjectRef))]
 #[derive(Clone, Deserialize, ToSchema)]
 #[serde(untagged)]
 pub enum EmbeddingInput {
@@ -134,7 +120,6 @@ where
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(test, derive(Serialize))]
-#[cfg_attr(feature = "python", pyclass(frozen, sequence))]
 #[derive(Clone, Deserialize, ToSchema)]
 pub struct EmbeddingRequest {
     #[serde(default)]
@@ -192,141 +177,141 @@ impl From<EmbeddingRouter> for OpenApiRouter {
     }
 }
 
-#[cfg(feature = "python")]
-pub(crate) mod python {
-    use crate::embeddings::{
-        Embedding, EmbeddingRequest, EmbeddingResponse, EmbeddingResponseTag, EmbeddingRouter,
-        EmbeddingTag, EncodingFormat, MaybeBatched, Usage,
-    };
-    use crate::python::{impl_pyendpoint, impl_pyhandler};
-    use hfendpoints_binding_python::ImportablePyModuleBuilder;
-    use pyo3::exceptions::PyIndexError;
-    use pyo3::types::PyList;
+// #[cfg(feature = "python")]
+// pub(crate) mod python {
+//     use crate::embeddings::{
+//         Embedding, EmbeddingRequest, EmbeddingResponse, EmbeddingResponseTag, EmbeddingRouter,
+//         EmbeddingTag, EncodingFormat, MaybeBatched, Usage,
+//     };
+//     use crate::python::{impl_pyendpoint, impl_pyhandler};
+//     use hfendpoints_binding_python::ImportablePyModuleBuilder;
+//     use pyo3::exceptions::PyIndexError;
+//     use pyo3::types::PyList;
+//
+//     #[pymethods]
+//     impl Usage {
+//         #[new]
+//         fn py_new(prompt_tokens: usize, total_tokens: usize) -> Self {
+//             Self {
+//                 prompt_tokens,
+//                 total_tokens,
+//             }
+//         }
+//
+//         #[getter]
+//         fn prompt_tokens(&self) -> usize {
+//             self.prompt_tokens
+//         }
+//
+//         #[getter]
+//         fn total_tokens(&self) -> usize {
+//             self.total_tokens
+//         }
+//     }
+//
+//     #[pymethods]
+//     impl Embedding {
+//         #[new]
+//         #[pyo3(signature = (index, embedding))]
+//         fn py_new(index: u32, embedding: Bound<PyList>) -> PyResult<Self> {
+//             Ok(Self {
+//                 object: EmbeddingTag::Embedding,
+//                 index: index as usize,
+//                 embedding: embedding.extract::<Vec<f32>>()?,
+//             })
+//         }
+//     }
+//
+//     #[pymethods]
+//     impl EmbeddingRequest {
+//         pub fn __len__(&self) -> usize {
+//             match &self.input {
+//                 MaybeBatched::Single(_) => 1,
+//                 MaybeBatched::Batch(items) => items.len(),
+//             }
+//         }
+//
+//         pub fn __get_item__<'py>(
+//             &self,
+//             py: Python<'py>,
+//             index: usize,
+//         ) -> PyResult<Bound<'py, PyAny>> {
+//             match &self.input {
+//                 MaybeBatched::Single(item) => {
+//                     if index == 0 {
+//                         item.into_pyobject(py)
+//                     } else {
+//                         Err(PyErr::new::<PyIndexError, _>("index out of range"))
+//                     }
+//                 }
+//                 MaybeBatched::Batch(items) => {
+//                     let item = items
+//                         .get(index)
+//                         .ok_or(PyErr::new::<PyIndexError, _>("index out of range"))?;
+//                     item.into_pyobject(py)
+//                 }
+//             }
+//         }
+//
+//         #[getter]
+//         pub fn encoding_format(&self) -> EncodingFormat {
+//             self.encoding_format
+//         }
+//
+//         #[getter]
+//         pub fn is_batched(&self) -> bool {
+//             match self.input {
+//                 MaybeBatched::Single(_) => false,
+//                 MaybeBatched::Batch(_) => true,
+//             }
+//         }
+//
+//         #[getter]
+//         pub fn input<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+//             match &self.input {
+//                 MaybeBatched::Single(item) => item.into_pyobject(py),
+//                 MaybeBatched::Batch(items) => items.into_pyobject(py),
+//             }
+//         }
+//     }
+//
+//     #[pymethods]
+//     impl EmbeddingResponse {
+//         #[new]
+//         #[pyo3(signature = (model, embeddings, usage))]
+//         fn py_new(model: String, embeddings: Vec<Embedding>, usage: Usage) -> Self {
+//             Self {
+//                 object: EmbeddingResponseTag::List,
+//                 data: embeddings,
+//                 model,
+//                 usage,
+//             }
+//         }
+//     }
 
-    #[pymethods]
-    impl Usage {
-        #[new]
-        fn py_new(prompt_tokens: usize, total_tokens: usize) -> Self {
-            Self {
-                prompt_tokens,
-                total_tokens,
-            }
-        }
+// impl_pyhandler!(EmbeddingRequest, EmbeddingResponse);
+// impl_pyendpoint!(
+//     "EmbeddingEndpoint",
+//     PyEmbeddingEndpoint,
+//     PyHandler,
+//     EmbeddingRouter
+// );
 
-        #[getter]
-        fn prompt_tokens(&self) -> usize {
-            self.prompt_tokens
-        }
-
-        #[getter]
-        fn total_tokens(&self) -> usize {
-            self.total_tokens
-        }
-    }
-
-    #[pymethods]
-    impl Embedding {
-        #[new]
-        #[pyo3(signature = (index, embedding))]
-        fn py_new(index: u32, embedding: Bound<PyList>) -> PyResult<Self> {
-            Ok(Self {
-                object: EmbeddingTag::Embedding,
-                index: index as usize,
-                embedding: embedding.extract::<Vec<f32>>()?,
-            })
-        }
-    }
-
-    #[pymethods]
-    impl EmbeddingRequest {
-        pub fn __len__(&self) -> usize {
-            match &self.input {
-                MaybeBatched::Single(_) => 1,
-                MaybeBatched::Batch(items) => items.len(),
-            }
-        }
-
-        pub fn __get_item__<'py>(
-            &self,
-            py: Python<'py>,
-            index: usize,
-        ) -> PyResult<Bound<'py, PyAny>> {
-            match &self.input {
-                MaybeBatched::Single(item) => {
-                    if index == 0 {
-                        item.into_pyobject(py)
-                    } else {
-                        Err(PyErr::new::<PyIndexError, _>("index out of range"))
-                    }
-                }
-                MaybeBatched::Batch(items) => {
-                    let item = items
-                        .get(index)
-                        .ok_or(PyErr::new::<PyIndexError, _>("index out of range"))?;
-                    item.into_pyobject(py)
-                }
-            }
-        }
-
-        #[getter]
-        pub fn encoding_format(&self) -> EncodingFormat {
-            self.encoding_format
-        }
-
-        #[getter]
-        pub fn is_batched(&self) -> bool {
-            match self.input {
-                MaybeBatched::Single(_) => false,
-                MaybeBatched::Batch(_) => true,
-            }
-        }
-
-        #[getter]
-        pub fn input<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-            match &self.input {
-                MaybeBatched::Single(item) => item.into_pyobject(py),
-                MaybeBatched::Batch(items) => items.into_pyobject(py),
-            }
-        }
-    }
-
-    #[pymethods]
-    impl EmbeddingResponse {
-        #[new]
-        #[pyo3(signature = (model, embeddings, usage))]
-        fn py_new(model: String, embeddings: Vec<Embedding>, usage: Usage) -> Self {
-            Self {
-                object: EmbeddingResponseTag::List,
-                data: embeddings,
-                model,
-                usage,
-            }
-        }
-    }
-
-    impl_pyhandler!(EmbeddingRequest, EmbeddingResponse);
-    impl_pyendpoint!(
-        "EmbeddingEndpoint",
-        PyEmbeddingEndpoint,
-        PyHandler,
-        EmbeddingRouter
-    );
-
-    // Bind hfendpoints.openai.embeddings submodule into the exported Python wheel
-    pub fn bind<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
-        let module = ImportablePyModuleBuilder::new(py, name)?
-            .defaults()?
-            .add_class::<Embedding>()?
-            .add_class::<EncodingFormat>()?
-            .add_class::<EmbeddingRequest>()?
-            .add_class::<EmbeddingResponse>()?
-            .add_class::<PyEmbeddingEndpoint>()?
-            .add_class::<Usage>()?
-            .finish();
-
-        Ok(module)
-    }
-}
+// Bind hfendpoints.openai.embeddings submodule into the exported Python wheel
+// pub fn bind<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
+//     let module = ImportablePyModuleBuilder::new(py, name)?
+//         .defaults()?
+//         .add_class::<Embedding>()?
+//         .add_class::<EncodingFormat>()?
+//         .add_class::<EmbeddingRequest>()?
+//         .add_class::<EmbeddingResponse>()?
+//         .add_class::<PyEmbeddingEndpoint>()?
+//         .add_class::<Usage>()?
+//         .finish();
+//
+//     Ok(module)
+// }
+// }
 
 #[cfg(test)]
 mod tests {
@@ -337,12 +322,13 @@ mod tests {
         routing::post,
         Router,
     };
+    use hfendpoints_core::Error;
     use http_body_util::BodyExt;
     use hyper::body::Buf;
     use serde_json::json;
     use std::time::Duration;
     use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
-    use tower::ServiceExt;
+    use tower::util::ServiceExt;
     use tower_http::timeout::TimeoutLayer;
 
     // Test helper to create a test app

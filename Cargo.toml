@@ -3,16 +3,20 @@ resolver = "3"
 members = [
     "hfendpoints",
     "hfendpoints-binding-python",
-    "hfendpoints-core",
-    "hfendpoints-http",
-    "hfendpoints-io"
+    "hfendpoints-core", "hfendpoints-http",
+    "hfendpoints-io",
+    "hfendpoints-openai",
 ]
 
 [workspace.dependencies]
+axum = "0.8"
+axum-extra = "0.10.1"
 pyo3 = { version = "0.24.2", features = ["abi3-py312"] }
 serde = "1.0"
-tokio = { version = "1.44", default-features = false }
+tokio = { version = "1.44", default-features = false, features = ["rt-multi-thread", "macros"] }
 tracing = "0.1.41"
+utoipa = "5.3.1"
+utoipa-axum = "0.2.0"
 
 [profile]
 release = { lto = true, opt-level = 3, codegen-units = 1 }
