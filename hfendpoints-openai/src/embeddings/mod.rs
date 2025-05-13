@@ -214,7 +214,7 @@ pub mod python {
                 debug!("[ingress] request: {request:?}");
             }
 
-            // Convert the underlying OpenAI specific I/O to the adapter layer
+            // Convert the underlying frontend-specific message to the I/O adapter layer
             let crequest: EmbeddingRequest = request.try_into()?;
 
             // Create the coroutine on the Python side to await through tokio
@@ -233,6 +233,7 @@ pub mod python {
                 Error::from(Implementation(err.to_string().into()))
             })?;
 
+            // Execute the coroutine on Python
             let response = pyo3_async_runtimes::tokio::get_runtime()
                 .spawn(async {
                     // Schedule the coroutine
@@ -255,6 +256,7 @@ pub mod python {
                 .await
                 .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
 
+            // Attempt to convert back the output to the original frontend-specific message
             response?.0.try_into()
         }
     }
