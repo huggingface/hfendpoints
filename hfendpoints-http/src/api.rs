@@ -10,4 +10,4 @@ use utoipa::OpenApi;
         (name = EMBEDDINGS_TAG, description = EMBEDDINGS_DESC)
     )
 )]
-pub(crate) struct ApiDoc;
+pub struct ApiDoc;

@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use utoipa::ToSchema;
 
 #[cfg(feature = "python")]
-use pyo3::FromPyObject;
+use pyo3::{FromPyObject, IntoPyObject};
 
 pub mod audio;
 pub mod embedding;
@@ -17,7 +17,7 @@ pub mod embedding;
 /// let batch = MaybeBatched::Batched(vec!["My name is Morgan", "I'm working at Hugging Face"]);
 /// ```
 #[cfg_attr(debug_assertions, derive(Debug))]
-#[cfg_attr(feature = "python", derive(FromPyObject))]
+#[cfg_attr(feature = "python", derive(FromPyObject, IntoPyObject))]
 #[derive(Clone, Deserialize, Serialize, ToSchema)]
 #[serde(untagged)]
 #[derive(PartialEq)]
@@ -161,6 +161,7 @@ impl Usage {
 
 /// Generic request representation for endpoints
 #[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg_attr(feature = "python", derive(FromPyObject, IntoPyObject))]
 #[derive(Deserialize, ToSchema)]
 pub struct EndpointRequest<I, P>
 where
@@ -176,7 +177,8 @@ where
 
 /// Generic response representation for endpoints
 #[cfg_attr(debug_assertions, derive(Debug))]
-#[derive(Serialize, ToSchema)]
+#[cfg_attr(feature = "python", derive(FromPyObject))]
+#[derive(Clone, Serialize, ToSchema)]
 pub struct EndpointResponse<O, U>
 where
     O: ToSchema,

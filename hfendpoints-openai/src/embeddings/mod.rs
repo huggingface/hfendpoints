@@ -105,7 +105,7 @@ pub struct OpenAiEmbeddingRequest {
     user: Option<String>,
 }
 
-type EmbeddingRequestWithContext = RequestWithContext<OpenAiEmbeddingRequest>;
+type OpenAiEmbeddingRequestWithContext = RequestWithContext<OpenAiEmbeddingRequest>;
 
 #[utoipa::path(
     post,
@@ -118,7 +118,9 @@ type EmbeddingRequestWithContext = RequestWithContext<OpenAiEmbeddingRequest>;
 )]
 #[instrument(skip(state, request))]
 pub async fn embed(
-    State(state): State<EndpointContext<EmbeddingRequestWithContext, OpenAiEmbeddingResponse>>,
+    State(state): State<
+        EndpointContext<OpenAiEmbeddingRequestWithContext, OpenAiEmbeddingResponse>,
+    >,
     request_id: TypedHeader<RequestId>,
     Json(request): Json<OpenAiEmbeddingRequest>,
 ) -> HttpResult<OpenAiEmbeddingResponse> {
@@ -137,15 +139,15 @@ pub async fn embed(
 /// Helper factory to build
 /// [HTTP Transcription endpoint](https://platform.openai.com/docs/api-reference/audio/createTranscription)
 #[derive(Clone)]
-pub struct EmbeddingRouter(
+pub struct OpenAiEmbeddingRouter(
     pub  UnboundedSender<(
-        EmbeddingRequestWithContext,
+        OpenAiEmbeddingRequestWithContext,
         UnboundedSender<EndpointResult<OpenAiEmbeddingResponse>>,
     )>,
 );
 
-impl From<EmbeddingRouter> for OpenApiRouter {
-    fn from(value: EmbeddingRouter) -> Self {
+impl From<OpenAiEmbeddingRouter> for OpenApiRouter {
+    fn from(value: OpenAiEmbeddingRouter) -> Self {
         OpenApiRouter::new()
             .routes(routes!(embed))
             .with_state(EndpointContext::new(value.0))
@@ -179,16 +181,117 @@ impl TryFrom<EmbeddingResponse> for OpenAiEmbeddingResponse {
     }
 }
 
+#[cfg(feature = "python")]
+pub mod python {
+    use crate::embeddings::{
+        OpenAiEmbeddingRequest, OpenAiEmbeddingResponse, OpenAiEmbeddingRouter,
+    };
+    use hfendpoints_binding_python::ImportablePyModuleBuilder;
+    use hfendpoints_core::HandlerError::Implementation;
+    use hfendpoints_core::{Error, Handler};
+    use hfendpoints_http::impl_http_pyendpoint;
+    use hfendpoints_http::python::TASK_LOCALS;
+    use hfendpoints_io::embedding::python::{PyEmbeddingRequest, PyEmbeddingResponse};
+    use hfendpoints_io::embedding::EmbeddingRequest;
+    use pyo3::prelude::*;
+    use tracing::debug;
+
+    #[pyclass(subclass)]
+    pub struct PyHandler {
+        inner: PyObject,
+    }
+
+    impl Handler for PyHandler {
+        type Request = (OpenAiEmbeddingRequest, Context);
+        type Response = OpenAiEmbeddingResponse;
+
+        async fn on_request(&self, request: Self::Request) -> Result<Self::Response, Error> {
+            // Retrieve the current event loop
+            let locals = Python::with_gil(|py| TASK_LOCALS.get().unwrap().clone_ref(py));
+            let (request, ctx) = request;
+
+            if cfg!(debug_assertions) {
+                debug!("[ingress] request: {request:?}");
+            }
+
+            // Convert the underlying OpenAI specific I/O to the adapter layer
+            let crequest: EmbeddingRequest = request.try_into()?;
+
+            // Create the coroutine on the Python side to await through tokio
+            let coro = Python::with_gil(|py| {
+                // Only pass the PyEmbeddingRequest part to Python
+                let py_coro_call = self
+                    .inner
+                    .call1(py, (PyEmbeddingRequest(crequest), ctx))?
+                    .into_bound(py);
+
+                debug!("[NATIVE] asyncio Handler's coroutine (__call__) created");
+                pyo3_async_runtimes::into_future_with_locals(&locals, py_coro_call)
+            })
+            .map_err(|err| {
+                error!("Failed to retrieve __call__ coroutine: {err}");
+                Error::from(Implementation(err.to_string().into()))
+            })?;
+
+            let response = pyo3_async_runtimes::tokio::get_runtime()
+                .spawn(async {
+                    // Schedule the coroutine
+                    let response = match pyo3_async_runtimes::tokio::scope(locals, coro).await {
+                        Ok(resp) => resp,
+                        Err(err) => {
+                            error!("Failed to execute __call__: {err}");
+                            return Err(err);
+                        }
+                    };
+
+                    debug!("[NATIVE] asyncio Handler's coroutine (__call__) done");
+
+                    // We are downcasting from a Python object to a Rust typed object
+                    match Python::with_gil(|py| response.extract::<PyEmbeddingResponse>(py)) {
+                        Ok(resp) => Ok(resp),
+                        Err(err) => Err(err),
+                    }
+                })
+                .await
+                .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
+
+            response?.0.try_into()
+        }
+    }
+
+    impl_http_pyendpoint!(
+        "EmbeddingEndpoint",
+        PyEmbeddingEndpoint,
+        PyHandler,
+        OpenAiEmbeddingRouter
+    );
+
+    pub fn bind<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
+        let module = ImportablePyModuleBuilder::new(py, name)?
+            .defaults()?
+            .add_class::<PyEmbeddingEndpoint>()?
+            .finish();
+
+        Ok(module)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::embeddings::{
+        embed, Embedding, EmbeddingResponseTag, EmbeddingTag,
+        EncodingFormat, OpenAiEmbeddingRequestWithContext,
+    };
     use axum::{
         body::Body,
         http::{self, Request, StatusCode},
         routing::post,
         Router,
     };
-    use hfendpoints_core::Error;
+    use hfendpoints_core::{EndpointContext, EndpointResult, Error};
+    use hfendpoints_io::embedding::{EmbeddingInput, EmbeddingResponse};
+    use hfendpoints_io::{MaybeBatched, Usage};
     use http_body_util::BodyExt;
     use hyper::body::Buf;
     use serde_json::json;
@@ -200,7 +303,7 @@ mod tests {
     // Test helper to create a test app
     fn create_test_app(
         sender: UnboundedSender<(
-            EmbeddingRequestWithContext,
+            OpenAiEmbeddingRequestWithContext,
             UnboundedSender<EndpointResult<OpenAiEmbeddingResponse>>,
         )>,
     ) -> Router {

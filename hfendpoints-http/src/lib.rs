@@ -10,14 +10,14 @@ use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_scalar::{Scalar, Servable};
 
-mod api;
+pub(crate) mod api;
 mod context;
 pub mod environ;
 pub mod error;
 pub mod headers;
-mod routes;
+pub mod routes;
 
-use crate::api::ApiDoc;
+pub use crate::api::ApiDoc;
 use crate::environ::Timeout;
 use crate::routes::StatusRouter;
 pub use context::Context;
@@ -70,21 +70,27 @@ where
 #[cfg(feature = "python")]
 pub mod python {
     use crate::Context;
+    use hfendpoints_binding_python::tokio::create_multithreaded_runtime;
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
     use pyo3::prelude::*;
+    use pyo3::prepare_freethreaded_python;
+    use pyo3_async_runtimes::tokio::init;
     use pyo3_async_runtimes::TaskLocals;
     use tokio::sync::OnceCell;
+    use tracing::instrument;
 
-    macro_rules! impl_pyhandler {
-        ($handler: ident) => {
-            use crate::python::TASK_LOCALS;
-            use hfendpoints_core::{Error, Handler};
+    #[macro_export]
+    macro_rules! impl_http_pyhandler {
+        ($request: ident, $response: ident) => {
+            use hfendpoints_core::{Error, Handler, HandlerError::Implementation};
+            use pyo3::exceptions::PyRuntimeError;
             use pyo3_async_runtimes::TaskLocals;
             use std::process;
             use tokio::sync::OnceCell;
             use tracing::{debug, info, instrument};
+            use $crate::python::TASK_LOCALS;
 
-            pub(crate) static TASK_LOCALS: OnceCell<TaskLocals> = OnceCell::const_new();
+            // pub(crate) static TASK_LOCALS: OnceCell<TaskLocals> = OnceCell::const_new();
 
             /// Wraps the underlying, Python's heap-allocated, object in a GIL independent way
             /// to be shared between threads.
@@ -98,7 +104,10 @@ pub mod python {
                 inner: PyObject,
             }
 
-            impl $handler for PyHandler {
+            impl Handler for PyHandler {
+                type Request = $request;
+                type Response = $response;
+
                 #[instrument(skip_all)]
                 async fn on_request(
                     &self,
@@ -118,7 +127,9 @@ pub mod python {
                     })
                     .inspect_err(|err| {
                         error!("Failed to retrieve __call__ coroutine: {err}");
-                        Err(Error::Handler(Implementation("Handler is not callable.")))
+                        Err(Error::Handler(Implementation(
+                            "Handler is not callable.".into(),
+                        )));
                     })?;
 
                     pyo3_async_runtimes::tokio::get_runtime()
@@ -144,9 +155,9 @@ pub mod python {
         };
     }
 
-    macro_rules! impl_pyendpoint {
+    #[macro_export]
+    macro_rules! impl_http_pyendpoint {
         ($name: literal, $pyname: ident, $handler: ident, $router: ident) => {
-            use crate::{__path_health, ApiDoc, Context, health, serve_http};
             use hfendpoints_core::{Endpoint, wait_for_requests};
             use pyo3::exceptions::PyRuntimeError;
             use pyo3::prelude::*;
@@ -155,10 +166,12 @@ pub mod python {
             use tokio::net::TcpListener;
             use tokio::sync::mpsc::unbounded_channel;
             use tokio::task::spawn;
-            use tracing::error;
+            use tracing::{error, info, instrument};
             use utoipa::OpenApi;
             use utoipa_axum::{router::OpenApiRouter, routes};
-            use utoipa_scalar::{Scalar, Servable};
+            // use utoipa_scalar::{Scalar, Servable};
+            use $crate::routes::{__path_health, health};
+            use $crate::{ApiDoc, Context, serve_http};
 
             #[pyclass(name = $name)]
             pub(crate) struct $pyname(Arc<$handler>);
@@ -196,7 +209,7 @@ pub mod python {
                 #[new]
                 fn new(inner: PyObject) -> Self {
                     Self {
-                        0: Arc::new(PyHandler { inner }),
+                        0: Arc::new($handler { inner }),
                     }
                 }
 
@@ -214,7 +227,7 @@ pub mod python {
     }
 
     // `TaskLocal` keeps track of the asynchronous computations being run globally for the whole tokio-spawned threads
-    pub(crate) static TASK_LOCALS: OnceCell<TaskLocals> = OnceCell::const_new();
+    pub static TASK_LOCALS: OnceCell<TaskLocals> = OnceCell::const_new();
 
     pub async fn serve(endpoint: PyObject, interface: String, port: u16) -> PyResult<()> {
         let locals = TASK_LOCALS
@@ -233,10 +246,44 @@ pub mod python {
         Ok(())
     }
 
+    #[pyfunction]
+    #[instrument(skip(endpoint))]
+    #[pyo3(name = "run")]
+    fn run(endpoint: PyObject, interface: String, port: u16) -> PyResult<()> {
+        prepare_freethreaded_python();
+
+        // Initialize the tokio runtime and bind this runtime to the tokio <> asyncio compatible layer
+        init(create_multithreaded_runtime());
+
+        Python::with_gil(|py| {
+            py.allow_threads(|| {
+                pyo3_async_runtimes::tokio::get_runtime().block_on(async {
+                    Python::with_gil(|inner| {
+                        pyo3_async_runtimes::tokio::run(inner, serve(endpoint, interface, port))
+                    })?;
+                    Ok::<_, PyErr>(())
+                })
+            })
+        })?;
+
+        Ok::<_, PyErr>(())
+    }
+
+    /// Bind this module to the python's wheel  
+    ///
+    /// # Arguments
+    ///
+    /// * `py`: Python acquired GIL reference
+    /// * `name`: name of the python module to register this under
+    ///
     pub fn bind<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
         let module = ImportablePyModuleBuilder::new(py, name)?
+            .defaults()?
             .add_class::<Context>()?
             .finish();
+
+        module.add_function(wrap_pyfunction!(run, &module)?)?;
+
         Ok(module)
     }
 }

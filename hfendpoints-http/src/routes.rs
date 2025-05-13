@@ -13,7 +13,7 @@ use utoipa_axum::routes;
     )
 )]
 #[instrument]
-async fn health() -> StatusCode {
+pub async fn health() -> StatusCode {
     StatusCode::OK
 }
 

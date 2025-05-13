@@ -5,22 +5,23 @@ edition = "2024"
 
 [dependencies]
 axum = { version = "0.8", features = ["multipart", "tracing"] }
-axum-extra = { version = "0.10.1", features = ["typed-header", "tracing"] }
-headers = "0.4.0"
+axum-extra = { version = "0.10", features = ["typed-header", "tracing"] }
+headers = "0.4"
 hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
 hfendpoints-core = { path = "../hfendpoints-core" }
+hfendpoints-io = { path = "../hfendpoints-io" }
 pyo3 = { workspace = true }
 pyo3-async-runtimes = { version = "0.24", features = ["attributes", "tokio-runtime"] }
 serde = { workspace = true }
-thiserror = "2.0.12"
+thiserror = "2.0"
 tokio = { workspace = true, features = ["net", "parking_lot", "rt-multi-thread"] }
-tower = { version = "0.5.2", features = ["tracing", "tokio"] }
-tower-http = { version = "0.6.2", features = ["request-id", "tracing", "trace", "timeout"] }
+tower = { version = "0.5", features = ["tracing", "tokio"] }
+tower-http = { version = "0.6", features = ["request-id", "tracing", "trace", "timeout"] }
 tracing = { workspace = true }
-utoipa = { version = "5.3", features = ["smallvec"] }
+utoipa = { version = "5.3" }
 utoipa-axum = "0.2"
-utoipa-scalar = { version = "0.3.0", features = ["axum"] }
+utoipa-scalar = { version = "0.3", features = ["axum"] }
 
 [features]
 default = []
-python = ["hfendpoints-binding-python", "hfendpoints-core/python"]
+python = ["hfendpoints-binding-python", "hfendpoints-core/python", "hfendpoints-io/python"]

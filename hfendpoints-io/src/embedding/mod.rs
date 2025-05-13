@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 #[cfg(feature = "python")]
-use pyo3::prelude::IntoPyObjectRef;
+use pyo3::prelude::{IntoPyObject, IntoPyObjectRef};
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(feature = "python", derive(IntoPyObjectRef))]
@@ -17,6 +17,7 @@ pub enum EmbeddingInput {
 }
 
 #[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg_attr(feature = "python", derive(IntoPyObject))]
 #[derive(Copy, Clone, Default, ToSchema)]
 pub struct EmbeddingParams {
     normalize: bool,
@@ -43,7 +44,7 @@ pub trait EmbeddingHandler:
 }
 
 #[cfg(feature = "python")]
-pub(crate) mod python {
+pub mod python {
     use crate::embedding::{EmbeddingRequest, EmbeddingResponse};
     use crate::{EndpointResponse, MaybeBatched, Usage};
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
@@ -53,7 +54,7 @@ pub(crate) mod python {
     use pyo3::IntoPyObjectExt;
 
     #[pyclass(name = "EmbeddingRequest", frozen)]
-    pub struct PyEmbeddingRequest(EmbeddingRequest);
+    pub struct PyEmbeddingRequest(pub EmbeddingRequest);
 
     #[pymethods]
     impl PyEmbeddingRequest {
@@ -77,8 +78,9 @@ pub(crate) mod python {
         Batched(Bound<'py, PyArray2<f32>>),
     }
 
+    #[derive(Clone)]
     #[pyclass(name = "EmbeddingResponse", frozen)]
-    pub struct PyEmbeddingResponse(EmbeddingResponse);
+    pub struct PyEmbeddingResponse(pub EmbeddingResponse);
 
     #[pymethods]
     impl PyEmbeddingResponse {
