@@ -188,12 +188,13 @@ pub mod python {
     };
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
     use hfendpoints_core::HandlerError::Implementation;
-    use hfendpoints_core::{Error, Handler};
+    use hfendpoints_core::{EndpointResult, Error, Handler};
     use hfendpoints_http::impl_http_pyendpoint;
     use hfendpoints_http::python::TASK_LOCALS;
     use hfendpoints_io::embedding::python::{PyEmbeddingRequest, PyEmbeddingResponse};
     use hfendpoints_io::embedding::EmbeddingRequest;
     use pyo3::prelude::*;
+    use pyo3_async_runtimes::TaskLocals;
     use tracing::debug;
 
     #[pyclass(subclass)]
@@ -201,28 +202,18 @@ pub mod python {
         inner: PyObject,
     }
 
-    impl Handler for PyHandler {
-        type Request = (OpenAiEmbeddingRequest, Context);
-        type Response = OpenAiEmbeddingResponse;
-
-        async fn on_request(&self, request: Self::Request) -> Result<Self::Response, Error> {
-            // Retrieve the current event loop
-            let locals = Python::with_gil(|py| TASK_LOCALS.get().unwrap().clone_ref(py));
-            let (request, ctx) = request;
-
-            if cfg!(debug_assertions) {
-                debug!("[ingress] request: {request:?}");
-            }
-
-            // Convert the underlying frontend-specific message to the I/O adapter layer
-            let crequest: EmbeddingRequest = request.try_into()?;
-
-            // Create the coroutine on the Python side to await through tokio
-            let coro = Python::with_gil(|py| {
+    impl PyHandler {
+        fn materialize_coroutine(
+            &self,
+            request: EmbeddingRequest,
+            context: Context,
+            locals: &TaskLocals,
+        ) -> EndpointResult<impl Future<Output = PyResult<PyObject>> + Send + 'static> {
+            Python::with_gil(|py| {
                 // Only pass the PyEmbeddingRequest part to Python
                 let py_coro_call = self
                     .inner
-                    .call1(py, (PyEmbeddingRequest(crequest), ctx))?
+                    .call1(py, (PyEmbeddingRequest(request), context))?
                     .into_bound(py);
 
                 debug!("[NATIVE] asyncio Handler's coroutine (__call__) created");
@@ -231,13 +222,19 @@ pub mod python {
             .map_err(|err| {
                 error!("Failed to retrieve __call__ coroutine: {err}");
                 Error::from(Implementation(err.to_string().into()))
-            })?;
+            })
+        }
 
-            // Execute the coroutine on Python
-            let response = pyo3_async_runtimes::tokio::get_runtime()
+        async fn execute_coroutine(
+            &self,
+            coroutine: impl Future<Output = PyResult<PyObject>> + Send + 'static,
+            locals: TaskLocals,
+        ) -> PyResult<PyEmbeddingResponse> {
+            pyo3_async_runtimes::tokio::get_runtime()
                 .spawn(async {
                     // Schedule the coroutine
-                    let response = match pyo3_async_runtimes::tokio::scope(locals, coro).await {
+                    let response = match pyo3_async_runtimes::tokio::scope(locals, coroutine).await
+                    {
                         Ok(resp) => resp,
                         Err(err) => {
                             error!("Failed to execute __call__: {err}");
@@ -254,10 +251,34 @@ pub mod python {
                     }
                 })
                 .await
-                .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
+                .map_err(|err| PyRuntimeError::new_err(err.to_string()))?
+        }
+    }
+
+    impl Handler for PyHandler {
+        type Request = (OpenAiEmbeddingRequest, Context);
+        type Response = OpenAiEmbeddingResponse;
+
+        async fn on_request(&self, request: Self::Request) -> Result<Self::Response, Error> {
+            // Retrieve the current event loop
+            let locals = Python::with_gil(|py| TASK_LOCALS.get().unwrap().clone_ref(py));
+            let (request, context) = request;
+
+            debug!("[INGRESS] request: {request:?}");
+
+            // Convert the underlying frontend-specific message to the I/O adapter layer
+            let request: EmbeddingRequest = request.try_into()?;
+
+            debug!("[INGRESS] successfully converted request to {request:?}");
+
+            // Create the coroutine on the Python side to await through tokio
+            let coroutine = self.materialize_coroutine(request, context, &locals)?;
+
+            // Execute the coroutine on Python
+            let response = self.execute_coroutine(coroutine, locals).await?;
 
             // Attempt to convert back the output to the original frontend-specific message
-            response?.0.try_into()
+            response.0.try_into()
         }
     }
 

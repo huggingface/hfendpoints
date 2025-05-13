@@ -169,7 +169,6 @@ pub mod python {
             use tracing::{error, info, instrument};
             use utoipa::OpenApi;
             use utoipa_axum::{router::OpenApiRouter, routes};
-            // use utoipa_scalar::{Scalar, Servable};
             use $crate::routes::{__path_health, health};
             use $crate::{ApiDoc, Context, serve_http};
 
