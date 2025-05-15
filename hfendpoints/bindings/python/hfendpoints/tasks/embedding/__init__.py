@@ -1,0 +1,1 @@
+from hfendpoints._hfendpoints.tasks.embedding import EmbeddingRequest, EmbeddingResponse

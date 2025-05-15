@@ -9,7 +9,7 @@ axum-extra = { workspace = true }
 hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
 hfendpoints-core = { path = "../hfendpoints-core" }
 hfendpoints-http = { path = "../hfendpoints-http" }
-hfendpoints-io = { path = "../hfendpoints-io" }
+hfendpoints-tasks = { path = "../hfendpoints-tasks" }
 pyo3 = { workspace = true, optional = true, features = ["abi3-py312", "experimental-async"] }
 pyo3-async-runtimes = { version = "0.24", features = ["attributes", "tokio-runtime"] }
 #rust-numpy = { version = "0.1.0", optional = true }
@@ -32,4 +32,4 @@ tower-http = { version = "0.6.4", features = ["timeout"] }
 [features]
 default = []
 #python = ["hfendpoints-binding-python/tokio", "pyo3", "rust-numpy", "numpy"]
-python = ["hfendpoints-binding-python/tokio", "hfendpoints-io/python", "pyo3"]
+python = ["hfendpoints-binding-python/tokio", "hfendpoints-http/python", "hfendpoints-tasks/python", "pyo3"]

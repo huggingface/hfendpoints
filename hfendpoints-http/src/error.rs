@@ -1,7 +1,7 @@
 use axum::extract::multipart::MultipartError;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use hfendpoints_core::Error as EndpointError;
+use hfendpoints_core::{Error as EndpointError, Error};
 use std::num::ParseFloatError;
 use thiserror::Error;
 use tokio::io::Error as TokioIoError;
@@ -23,6 +23,12 @@ pub enum HttpError {
 
     #[error("No response was returned by the inference engine")]
     NoResponse,
+}
+
+impl From<HttpError> for Error {
+    fn from(value: HttpError) -> Self {
+        Error::Runtime(value.to_string().into())
+    }
 }
 
 impl From<ParseFloatError> for HttpError {

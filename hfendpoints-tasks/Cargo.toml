@@ -1,5 +1,5 @@
 [package]
-name = "hfendpoints-io"
+name = "hfendpoints-tasks"
 version = "0.3.0"
 edition = "2024"
 

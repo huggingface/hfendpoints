@@ -9,6 +9,7 @@ pub use context::EndpointContext;
 pub use endpoint::Endpoint;
 pub use handler::{wait_for_requests, Handler};
 pub use metrics::InFlightStats;
+use std::borrow::Cow;
 
 use crate::environ::EnvironmentError;
 use thiserror::Error;
@@ -23,6 +24,9 @@ pub enum Error {
 
     #[error("{0}")]
     Handler(#[from] HandlerError),
+
+    #[error("{0}")]
+    Runtime(Cow<'static, str>),
 
     #[cfg(feature = "python")]
     #[error("Caught error while executing Python code: {0}")]

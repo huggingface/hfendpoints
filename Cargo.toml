@@ -4,7 +4,7 @@ members = [
     "hfendpoints",
     "hfendpoints-binding-python",
     "hfendpoints-core", "hfendpoints-http",
-    "hfendpoints-io",
+    "hfendpoints-tasks",
     "hfendpoints-openai",
 ]
 

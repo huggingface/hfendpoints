@@ -9,7 +9,7 @@ axum-extra = { version = "0.10", features = ["typed-header", "tracing"] }
 headers = "0.4"
 hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
 hfendpoints-core = { path = "../hfendpoints-core" }
-hfendpoints-io = { path = "../hfendpoints-io" }
+hfendpoints-tasks = { path = "../hfendpoints-tasks" }
 pyo3 = { workspace = true }
 pyo3-async-runtimes = { version = "0.24", features = ["attributes", "tokio-runtime"] }
 serde = { workspace = true }
@@ -24,4 +24,4 @@ utoipa-scalar = { version = "0.3", features = ["axum"] }
 
 [features]
 default = []
-python = ["hfendpoints-binding-python", "hfendpoints-core/python", "hfendpoints-io/python"]
+python = ["hfendpoints-binding-python", "hfendpoints-core/python", "hfendpoints-tasks/python"]

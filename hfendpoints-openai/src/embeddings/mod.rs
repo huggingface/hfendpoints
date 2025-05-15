@@ -1,14 +1,14 @@
+use axum::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use axum_extra::TypedHeader;
 use hfendpoints_core::{EndpointContext, EndpointResult, Error};
 use hfendpoints_http::headers::RequestId;
-use hfendpoints_http::{Context, HttpError, HttpResult, RequestWithContext, EMBEDDINGS_TAG};
-use hfendpoints_io::embedding::{
+use hfendpoints_http::{Context, EMBEDDINGS_TAG, HttpError, HttpResult, RequestWithContext};
+use hfendpoints_tasks::embedding::{
     EmbeddingInput, EmbeddingParams, EmbeddingRequest, EmbeddingResponse,
 };
-use hfendpoints_io::{MaybeBatched, Usage};
+use hfendpoints_tasks::{MaybeBatched, Usage};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::instrument;
@@ -188,11 +188,11 @@ pub mod python {
     };
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
     use hfendpoints_core::HandlerError::Implementation;
-    use hfendpoints_core::{EndpointResult, Error, Handler};
+    use hfendpoints_core::{EndpointResult, Handler};
     use hfendpoints_http::impl_http_pyendpoint;
     use hfendpoints_http::python::TASK_LOCALS;
-    use hfendpoints_io::embedding::python::{PyEmbeddingRequest, PyEmbeddingResponse};
-    use hfendpoints_io::embedding::EmbeddingRequest;
+    use hfendpoints_tasks::embedding::EmbeddingRequest;
+    use hfendpoints_tasks::embedding::python::{PyEmbeddingRequest, PyEmbeddingResponse};
     use pyo3::prelude::*;
     use pyo3_async_runtimes::TaskLocals;
     use tracing::debug;
@@ -303,23 +303,23 @@ pub mod python {
 mod tests {
     use super::*;
     use crate::embeddings::{
-        embed, Embedding, EmbeddingResponseTag, EmbeddingTag,
-        EncodingFormat, OpenAiEmbeddingRequestWithContext,
+        Embedding, EmbeddingResponseTag, EmbeddingTag, EncodingFormat,
+        OpenAiEmbeddingRequestWithContext, embed,
     };
     use axum::{
+        Router,
         body::Body,
         http::{self, Request, StatusCode},
         routing::post,
-        Router,
     };
     use hfendpoints_core::{EndpointContext, EndpointResult, Error};
-    use hfendpoints_io::embedding::{EmbeddingInput, EmbeddingResponse};
-    use hfendpoints_io::{MaybeBatched, Usage};
+    use hfendpoints_tasks::embedding::{EmbeddingInput, EmbeddingResponse};
+    use hfendpoints_tasks::{MaybeBatched, Usage};
     use http_body_util::BodyExt;
     use hyper::body::Buf;
     use serde_json::json;
     use std::time::Duration;
-    use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
+    use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
     use tower::util::ServiceExt;
     use tower_http::timeout::TimeoutLayer;
 

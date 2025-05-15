@@ -158,7 +158,7 @@ pub mod python {
     #[macro_export]
     macro_rules! impl_http_pyendpoint {
         ($name: literal, $pyname: ident, $handler: ident, $router: ident) => {
-            use hfendpoints_core::{Endpoint, wait_for_requests};
+            use hfendpoints_core::{Endpoint, Error, wait_for_requests};
             use pyo3::exceptions::PyRuntimeError;
             use pyo3::prelude::*;
             use pyo3::types::PyNone;
@@ -190,15 +190,14 @@ pub mod python {
                         "Starting endpoint at {}:{}",
                         &inet_address.0, &inet_address.1
                     );
-                    pyo3_async_runtimes::tokio::get_runtime()
+
+                    match pyo3_async_runtimes::tokio::get_runtime()
                         .spawn(serve_http(inet_address, router))
                         .await
-                        .inspect_err(|err| {
-                            info!("Caught error while serving endpoint: {err}");
-                        })
-                        .unwrap();
-
-                    Ok(())
+                    {
+                        Ok(res) => Ok(res?),
+                        Err(join_error) => Err(Error::Runtime(join_error.to_string().into())),
+                    }
                 }
             }
 
