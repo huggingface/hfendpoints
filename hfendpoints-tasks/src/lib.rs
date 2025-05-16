@@ -12,7 +12,7 @@ pub mod embedding;
 ///
 /// # Examples
 /// ```
-/// use hfendpoints_io::MaybeBatched;
+/// use hfendpoints_tasks::MaybeBatched;
 /// let single = MaybeBatched::Single("My name is Morgan");
 /// let batch = MaybeBatched::Batched(vec!["My name is Morgan", "I'm working at Hugging Face"]);
 /// ```
@@ -59,7 +59,7 @@ pub enum MaybeBatched<T> {
 /// # Examples
 ///
 /// ```
-/// use hfendpoints_io::Usage;
+/// use hfendpoints_tasks::Usage;
 /// let usage = Usage { prompt_tokens: 1024, total_tokens: 1084 };
 /// assert_eq!(usage.prompt_tokens, 1024);
 /// assert_eq!(usage.total_tokens, 1084);
@@ -68,7 +68,7 @@ pub enum MaybeBatched<T> {
 ///
 /// If the two values are the same, you can you `Usage::same` helper factory function
 /// ```
-/// use hfendpoints_io::Usage;
+/// use hfendpoints_tasks::Usage;
 /// let usage = Usage::same(100);
 /// assert_eq!(usage.prompt_tokens, usage.total_tokens);
 /// assert_eq!(usage.total_tokens, 100);
@@ -118,7 +118,7 @@ impl Usage {
     ///
     /// # Example
     /// ```
-    /// use hfendpoints_io::Usage;
+    /// use hfendpoints_tasks::Usage;
     ///
     /// let usage = Usage::new(100, 128);
     /// assert_eq!(usage.prompt_tokens, 100);
@@ -144,7 +144,7 @@ impl Usage {
     ///
     /// # Example
     /// ```
-    /// use hfendpoints_io::Usage;
+    /// use hfendpoints_tasks::Usage;
     ///
     /// let usage = Usage::same(100);
     /// assert_eq!(usage.prompt_tokens, 100);
