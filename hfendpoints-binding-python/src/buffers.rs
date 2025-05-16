@@ -1,13 +1,13 @@
-use std::ffi::{c_int, c_void, CString};
-use std::ptr;
 use pyo3::exceptions::PyBufferError;
 use pyo3::ffi;
 use pyo3::prelude::*;
+use std::ffi::{c_int, c_void, CString};
+use std::ptr;
 
 /// # Safety
 ///
 /// `view` must be a valid pointer to ffi::Py_buffer, or null
-/// `data` must outlive the Python lifetime of `owner` (i.e. data must be owned by owner, or data
+/// `data` must outlive the Python lifetime of `owner` (i.e., data must be owned by owner, or data
 /// must be static data)
 pub unsafe fn fill_view_from_readonly_data(
     view: *mut ffi::Py_buffer,

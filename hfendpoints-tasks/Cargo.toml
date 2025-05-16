@@ -1,0 +1,21 @@
+[package]
+name = "hfendpoints-tasks"
+version = "0.3.0"
+edition = "2024"
+
+[dependencies]
+hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
+hfendpoints-core = { path = "../hfendpoints-core" }
+numpy = { version = "0.24.0", optional = true }
+rust-numpy = { version = "0.1.0", optional = true }
+serde = { workspace = true, features = ["derive"] }
+pyo3 = { workspace = true, optional = true }
+utoipa = "5.3.1"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }
+pyo3 = { workspace = true, features = ["auto-initialize"] }
+
+[features]
+default = []
+python = ["hfendpoints-binding-python", "pyo3", "numpy", "rust-numpy"]

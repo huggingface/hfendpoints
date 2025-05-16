@@ -1,0 +1,1 @@
+from hfendpoints._hfendpoints.openai.embedding import EmbeddingEndpoint

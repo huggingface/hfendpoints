@@ -1,7 +1,7 @@
 from typing import Protocol, TypeVar, runtime_checkable
 
-from packaging.version import Version
 from hfendpoints._hfendpoints import __version__
+from packaging.version import Version
 
 from .config import EndpointConfig, ensure_supported_architectures
 
