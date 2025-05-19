@@ -24,4 +24,4 @@ utoipa-scalar = { version = "0.3", features = ["axum"] }
 
 [features]
 default = []
-python = ["hfendpoints-binding-python", "hfendpoints-core/python", "hfendpoints-tasks/python"]
+python = ["hfendpoints-binding-python/tokio", "hfendpoints-core/python", "hfendpoints-tasks/python"]

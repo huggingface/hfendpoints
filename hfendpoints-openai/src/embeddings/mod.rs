@@ -1,10 +1,10 @@
-use axum::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
+use axum::Json;
 use axum_extra::TypedHeader;
 use hfendpoints_core::{EndpointContext, EndpointResult, Error};
 use hfendpoints_http::headers::RequestId;
-use hfendpoints_http::{Context, EMBEDDINGS_TAG, HttpError, HttpResult, RequestWithContext};
+use hfendpoints_http::{Context, HttpError, HttpResult, RequestWithContext, EMBEDDINGS_TAG};
 use hfendpoints_tasks::embedding::{
     EmbeddingInput, EmbeddingParams, EmbeddingRequest, EmbeddingResponse,
 };
@@ -159,7 +159,10 @@ impl TryFrom<OpenAiEmbeddingRequest> for EmbeddingRequest {
 
     #[inline]
     fn try_from(value: OpenAiEmbeddingRequest) -> Result<Self, Self::Error> {
-        Ok(Self::new(value.input, EmbeddingParams::new(true)))
+        Ok(Self::new(
+            value.input,
+            EmbeddingParams::new(Some(true), None, None, None),
+        ))
     }
 }
 
@@ -170,7 +173,7 @@ impl TryFrom<EmbeddingResponse> for OpenAiEmbeddingResponse {
         let usage = value.usage.unwrap_or_default();
         let embeddings = match value.output {
             MaybeBatched::Single(item) => vec![Embedding::new(0, item)],
-            MaybeBatched::Batched(items) => items
+            MaybeBatched::Batch(items) => items
                 .into_iter()
                 .enumerate()
                 .map(|(index, item)| Embedding::new(index, item))
@@ -191,8 +194,8 @@ pub mod python {
     use hfendpoints_core::{EndpointResult, Handler};
     use hfendpoints_http::impl_http_pyendpoint;
     use hfendpoints_http::python::TASK_LOCALS;
-    use hfendpoints_tasks::embedding::EmbeddingRequest;
     use hfendpoints_tasks::embedding::python::{PyEmbeddingRequest, PyEmbeddingResponse};
+    use hfendpoints_tasks::embedding::EmbeddingRequest;
     use pyo3::prelude::*;
     use pyo3_async_runtimes::TaskLocals;
     use tracing::debug;
@@ -303,14 +306,14 @@ pub mod python {
 mod tests {
     use super::*;
     use crate::embeddings::{
-        Embedding, EmbeddingResponseTag, EmbeddingTag, EncodingFormat,
-        OpenAiEmbeddingRequestWithContext, embed,
+        embed, Embedding, EmbeddingResponseTag, EmbeddingTag,
+        EncodingFormat, OpenAiEmbeddingRequestWithContext,
     };
     use axum::{
-        Router,
         body::Body,
         http::{self, Request, StatusCode},
         routing::post,
+        Router,
     };
     use hfendpoints_core::{EndpointContext, EndpointResult, Error};
     use hfendpoints_tasks::embedding::{EmbeddingInput, EmbeddingResponse};
@@ -319,7 +322,7 @@ mod tests {
     use hyper::body::Buf;
     use serde_json::json;
     use std::time::Duration;
-    use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
+    use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
     use tower::util::ServiceExt;
     use tower_http::timeout::TimeoutLayer;
 
@@ -545,7 +548,7 @@ mod tests {
     fn test_embedding_response_to_openai_conversion_batched() {
         // Test batched embeddings conversion
         let batched_response = EmbeddingResponse {
-            output: MaybeBatched::Batched(vec![vec![0.1, 0.2], vec![0.3, 0.4]]),
+            output: MaybeBatched::Batch(vec![vec![0.1, 0.2], vec![0.3, 0.4]]),
             usage: Some(Usage::new(2, 3)),
         };
 
@@ -560,7 +563,7 @@ mod tests {
 
         // Test usage conversion
         let response_without_usage = EmbeddingResponse {
-            output: MaybeBatched::Batched(vec![vec![0.1, 0.2], vec![0.3, 0.4]]),
+            output: MaybeBatched::Batch(vec![vec![0.1, 0.2], vec![0.3, 0.4]]),
             usage: None,
         };
 
@@ -578,7 +581,7 @@ mod tests {
     fn test_embedding_response_to_openai_conversion_batched_no_usage() {
         // Test batched embeddings conversion
         let response_without_usage = EmbeddingResponse {
-            output: MaybeBatched::Batched(vec![vec![0.1, 0.2], vec![0.3, 0.4]]),
+            output: MaybeBatched::Batch(vec![vec![0.1, 0.2], vec![0.3, 0.4]]),
             usage: None,
         };
 

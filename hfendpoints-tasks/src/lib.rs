@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use utoipa::ToSchema;
 
 #[cfg(feature = "python")]
-use pyo3::{FromPyObject, IntoPyObject};
+use pyo3::prelude::*;
 
 pub mod audio;
 pub mod embedding;
@@ -14,7 +14,7 @@ pub mod embedding;
 /// ```
 /// use hfendpoints_tasks::MaybeBatched;
 /// let single = MaybeBatched::Single("My name is Morgan");
-/// let batch = MaybeBatched::Batched(vec!["My name is Morgan", "I'm working at Hugging Face"]);
+/// let batch = MaybeBatched::Batch(vec!["My name is Morgan", "I'm working at Hugging Face"]);
 /// ```
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(feature = "python", derive(FromPyObject, IntoPyObject))]
@@ -26,7 +26,21 @@ pub enum MaybeBatched<T> {
     Single(T),
 
     /// Sequence of elements
-    Batched(Vec<T>),
+    Batch(Vec<T>),
+}
+
+impl<T> From<T> for MaybeBatched<T> {
+    #[inline]
+    fn from(value: T) -> Self {
+        MaybeBatched::Single(value)
+    }
+}
+
+impl<T> From<Vec<T>> for MaybeBatched<T> {
+    #[inline]
+    fn from(value: Vec<T>) -> Self {
+        MaybeBatched::Batch(value)
+    }
 }
 
 /// The `Usage` structure represents information about token usage during a text generation process.
@@ -74,6 +88,7 @@ pub enum MaybeBatched<T> {
 /// assert_eq!(usage.total_tokens, 100);
 /// ```
 #[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg_attr(feature = "python", pyclass(frozen))]
 #[derive(Copy, Clone, Deserialize, Serialize, ToSchema)]
 pub struct Usage {
     /// Number of tokens included in the prompt after the tokenization process
@@ -205,16 +220,40 @@ where
 
 #[cfg(feature = "python")]
 pub mod python {
-    use crate::{audio, embedding};
+    use crate::{audio, embedding, Usage};
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
     use pyo3::prelude::PyModule;
-    use pyo3::{Bound, PyResult, Python};
+    use pyo3::{pymethods, Bound, PyResult, Python};
+
+    #[pymethods]
+    impl Usage {
+        #[new]
+        fn pynew(prompt_tokens: u32, total_tokens: u32) -> Self {
+            Self {
+                prompt_tokens: prompt_tokens as usize,
+                total_tokens: total_tokens as usize,
+            }
+        }
+
+        #[inline]
+        #[getter]
+        fn prompt_tokens(&self) -> u64 {
+            self.prompt_tokens as u64
+        }
+
+        #[inline]
+        #[getter]
+        fn total_tokens(&self) -> u64 {
+            self.total_tokens as u64
+        }
+    }
 
     pub fn bind<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
         let module = ImportablePyModuleBuilder::new(py, name)?
             .defaults()?
             .add_submodule(&embedding::python::bind(py, &format!("{name}.embedding"))?)?
             .add_submodule(&audio::python::bind(py, &format!("{name}.audio"))?)?
+            .add_class::<Usage>()?
             .finish();
         Ok(module)
     }

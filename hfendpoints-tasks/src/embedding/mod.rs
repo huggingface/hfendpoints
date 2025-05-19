@@ -4,7 +4,16 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 #[cfg(feature = "python")]
-use pyo3::prelude::{IntoPyObject, IntoPyObjectRef};
+use pyo3::prelude::{pyclass, IntoPyObject, IntoPyObjectRef};
+
+#[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg_attr(feature = "python", pyclass(eq, eq_int))]
+#[derive(Copy, Clone, Deserialize, Eq, PartialEq, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum TruncationDirection {
+    Left,
+    Right,
+}
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(feature = "python", derive(IntoPyObjectRef))]
@@ -18,14 +27,40 @@ pub enum EmbeddingInput {
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(feature = "python", derive(IntoPyObject))]
-#[derive(Copy, Clone, Default, ToSchema)]
+#[derive(Clone, Default, Deserialize, ToSchema)]
 pub struct EmbeddingParams {
-    normalize: bool,
+    /// Flag indicating whether the embedding vector should be normalized to length 1
+    pub normalize: Option<bool>,
+
+    ///  The name of the prompt that should be used by for encoding. If not set, no prompt will be applied.
+    ///
+    /// Must be a key in the `sentence-transformers` configuration `prompts` dictionary.
+    ///
+    /// For example, if ``prompt_name`` is "query" and the ``prompts`` is {"query": "query: ", ...},
+    /// then the sentence "What is the capital of France?" will be encoded as "query: What is the capital of France?"
+    /// because the prompt text will be prepended before any text to encode.
+    pub prompt_name: Option<String>,
+
+    /// Flag indicating if we should truncate the input to match the maximum sequence length supported by the model
+    pub truncate: Option<bool>,
+
+    /// If truncate is set to `true` indicate if we should truncate on the left or on the right side of the sentence(s).
+    pub truncation_direction: Option<TruncationDirection>,
 }
 
 impl EmbeddingParams {
-    pub fn new(normalize: bool) -> Self {
-        Self { normalize }
+    pub fn new(
+        normalize: Option<bool>,
+        prompt_name: Option<String>,
+        truncate: Option<bool>,
+        truncation_direction: Option<TruncationDirection>,
+    ) -> Self {
+        Self {
+            normalize,
+            prompt_name,
+            truncate,
+            truncation_direction,
+        }
     }
 }
 
@@ -58,11 +93,20 @@ pub mod python {
 
     #[pymethods]
     impl PyEmbeddingRequest {
+        #[inline]
         #[getter]
-        fn inputs<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        fn is_batched(&self) -> bool {
+            match &self.0.inputs {
+                MaybeBatched::Single(_) => false,
+                MaybeBatched::Batch(_) => true,
+            }
+        }
+
+        #[getter]
+        fn input<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
             match &self.0.inputs {
                 MaybeBatched::Single(item) => item.into_bound_py_any(py),
-                MaybeBatched::Batched(items) => items.into_bound_py_any(py),
+                MaybeBatched::Batch(items) => items.into_bound_py_any(py),
             }
         }
 
@@ -126,7 +170,7 @@ pub mod python {
                 SupportedEmbeddingsArray::Batched(items) => {
                     let hidden = items.dims()[1];
                     let buffer = items.to_vec()?;
-                    MaybeBatched::Batched(
+                    MaybeBatched::Batch(
                         buffer
                             .chunks_exact(hidden)
                             .map(|slice| slice.to_vec())
@@ -146,7 +190,7 @@ pub mod python {
                 MaybeBatched::Single(single) => {
                     format!("EmbeddingResponse(<{}xf32>)", single.len())
                 }
-                MaybeBatched::Batched(batched) => format!(
+                MaybeBatched::Batch(batched) => format!(
                     "EmbeddingResponse(<{}x{}xf32>)",
                     batched.len(),
                     batched.first().map_or(0, |item| item.len())
@@ -199,7 +243,7 @@ mod tests {
     fn test_batched_embedding_request() {
         let inputs = ["text1".to_string(), "text2".to_string()];
         let request = EmbeddingRequest {
-            inputs: MaybeBatched::Batched(
+            inputs: MaybeBatched::Batch(
                 inputs
                     .iter()
                     .map(|item| EmbeddingInput::Text(item.clone()))
@@ -208,7 +252,7 @@ mod tests {
             parameters: EmbeddingParams::default(),
         };
 
-        let inputs = MaybeBatched::Batched(
+        let inputs = MaybeBatched::Batch(
             inputs
                 .iter()
                 .map(|item| EmbeddingInput::Text(item.clone()))
@@ -220,16 +264,16 @@ mod tests {
 
     #[test]
     fn test_embedding_params_creation() {
-        let params = EmbeddingParams { normalize: true };
-        assert!(params.normalize);
+        let params = EmbeddingParams {
+            normalize: Some(true),
+            ..Default::default()
+        };
+        assert_eq!(params.normalize, Some(true));
 
-        let params = EmbeddingParams { normalize: false };
-        assert!(!params.normalize);
-    }
-
-    #[test]
-    fn test_embedding_params_clone() {
-        let params = EmbeddingParams { normalize: true };
-        assert_eq!(params.normalize, params.normalize);
+        let params = EmbeddingParams {
+            normalize: Some(false),
+            ..Default::default()
+        };
+        assert_eq!(params.normalize, Some(false));
     }
 }
