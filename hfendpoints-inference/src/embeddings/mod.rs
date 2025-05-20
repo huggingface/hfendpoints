@@ -17,8 +17,7 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
 #[cfg_attr(debug_assertions, derive(Debug))]
-#[cfg_attr(test, derive(Serialize))]
-#[derive(Clone, Deserialize, ToSchema)]
+#[derive(Clone, Deserialize, Serialize, ToSchema)]
 pub struct HuggingFaceInferenceEmbeddingRequest {
     /// The text or list of texts to embed.
     inputs: MaybeBatched<EmbeddingInput>,
