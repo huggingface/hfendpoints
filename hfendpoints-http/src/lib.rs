@@ -81,75 +81,99 @@ pub mod python {
 
     #[macro_export]
     macro_rules! impl_http_pyhandler {
-        ($request: ident, $response: ident) => {
-            use hfendpoints_core::{Error, Handler, HandlerError::Implementation};
+        ($request: ident, $response: ident, $pyrequest: ident, $pyresponse: ident) => {
+            use hfendpoints_core::{EndpointResult, Error, Handler, HandlerError::Implementation};
             use pyo3::exceptions::PyRuntimeError;
+            use pyo3::prelude::*;
             use pyo3_async_runtimes::TaskLocals;
             use std::process;
             use tokio::sync::OnceCell;
-            use tracing::{debug, info, instrument};
+            use tracing::{debug, error, info, instrument};
+            use $crate::Context;
             use $crate::python::TASK_LOCALS;
 
-            // pub(crate) static TASK_LOCALS: OnceCell<TaskLocals> = OnceCell::const_new();
-
-            /// Wraps the underlying, Python's heap-allocated, object in a GIL independent way
-            /// to be shared between threads.
-            ///
-            /// `PyHandler` implements the `Handler` trait which forwards the request handling
-            /// logic back to Python through the `hfendpoints.Handler` protocol enforcing
-            /// implementation of `__call__` method.
-            ///
+            #[pyclass(subclass)]
             pub struct PyHandler {
-                /// Python allocated object with `Handler` protocol implementation, GIL-independent
                 inner: PyObject,
             }
 
+            impl PyHandler {
+                fn materialize_coroutine(
+                    &self,
+                    request: $pyrequest,
+                    context: Context,
+                    locals: &TaskLocals,
+                ) -> EndpointResult<impl Future<Output = PyResult<PyObject>> + Send + 'static> {
+                    Python::with_gil(|py| {
+                        // Only pass the request part to Python
+                        let py_coro_call = self.inner.call1(py, (request, context))?.into_bound(py);
+
+                        debug!("[NATIVE] asyncio Handler's coroutine (__call__) created");
+                        pyo3_async_runtimes::into_future_with_locals(&locals, py_coro_call)
+                    })
+                    .map_err(|err| {
+                        error!("Failed to retrieve __call__ coroutine: {err}");
+                        Error::from(Implementation(err.to_string().into()))
+                    })
+                }
+
+                async fn execute_coroutine(
+                    &self,
+                    coroutine: impl Future<Output = PyResult<PyObject>> + Send + 'static,
+                    locals: TaskLocals,
+                ) -> PyResult<$pyresponse> {
+                    pyo3_async_runtimes::tokio::get_runtime()
+                        .spawn(async {
+                            // Schedule the coroutine
+                            let response =
+                                match pyo3_async_runtimes::tokio::scope(locals, coroutine).await {
+                                    Ok(resp) => resp,
+                                    Err(err) => {
+                                        error!("Failed to execute __call__: {err}");
+                                        return Err(err);
+                                    }
+                                };
+
+                            debug!("[NATIVE] asyncio Handler's coroutine (__call__) done");
+
+                            // We are downcasting from a Python object to a Rust typed object
+                            match Python::with_gil(|py| response.extract::<$pyresponse>(py)) {
+                                Ok(resp) => Ok(resp),
+                                Err(err) => Err(err),
+                            }
+                        })
+                        .await
+                        .map_err(|err| PyRuntimeError::new_err(err.to_string()))?
+                }
+            }
+
             impl Handler for PyHandler {
-                type Request = $request;
+                type Request = ($request, Context);
                 type Response = $response;
 
-                #[instrument(skip_all)]
                 async fn on_request(
                     &self,
                     request: Self::Request,
                 ) -> Result<Self::Response, Error> {
                     // Retrieve the current event loop
                     let locals = Python::with_gil(|py| TASK_LOCALS.get().unwrap().clone_ref(py));
+                    let (request, context) = request;
 
-                    let (request, ctx) = request;
+                    debug!("[INGRESS] request: {request:?}");
 
-                    // Create the coroutine on Python side to await through tokio
-                    let coro = Python::with_gil(|py| {
-                        let py_coro_call = self.inner.call1(py, (request, ctx))?.into_bound(py);
+                    // Convert the underlying frontend-specific message to the I/O adapter layer
+                    let request = $pyrequest(request.try_into()?);
 
-                        debug!("[NATIVE] asyncio Handler's coroutine (__call__) created");
-                        pyo3_async_runtimes::into_future_with_locals(&locals, py_coro_call)
-                    })
-                    .inspect_err(|err| {
-                        error!("Failed to retrieve __call__ coroutine: {err}");
-                        Err(Error::Handler(Implementation(
-                            "Handler is not callable.".into(),
-                        )));
-                    })?;
+                    debug!("[INGRESS] successfully converted request");
 
-                    pyo3_async_runtimes::tokio::get_runtime()
-                        .spawn(async {
-                            // Schedule the coroutine
-                            let response = pyo3_async_runtimes::tokio::scope(locals, coro)
-                                .await
-                                .inspect_err(|err| {
-                                    error!("Failed to execute __call__: {err}");
-                                })?;
+                    // Create the coroutine on the Python side to await through tokio
+                    let coroutine = self.materialize_coroutine(request, context, &locals)?;
 
-                            debug!("[NATIVE] asyncio Handler's coroutine (__call__) done");
+                    // Execute the coroutine on Python
+                    let response = self.execute_coroutine(coroutine, locals).await?;
 
-                            // We are downcasting from Python object to Rust typed type
-                            Ok(Python::with_gil(|py| {
-                                response.extract::<Self::Response>(py)
-                            })?)
-                        })
-                        .await
-                        .map_err(|err| PyRuntimeError::new_err(err.to_string()))?
+                    // Attempt to convert back the output to the original frontend-specific message
+                    response.0.try_into()
                 }
             }
         };
@@ -158,19 +182,17 @@ pub mod python {
     #[macro_export]
     macro_rules! impl_http_pyendpoint {
         ($name: literal, $pyname: ident, $handler: ident, $router: ident) => {
-            use hfendpoints_core::{Endpoint, Error, wait_for_requests};
-            use pyo3::exceptions::PyRuntimeError;
+            use hfendpoints_core::{Endpoint, wait_for_requests};
             use pyo3::prelude::*;
             use pyo3::types::PyNone;
             use std::sync::Arc;
             use tokio::net::TcpListener;
             use tokio::sync::mpsc::unbounded_channel;
             use tokio::task::spawn;
-            use tracing::{error, info, instrument};
             use utoipa::OpenApi;
             use utoipa_axum::{router::OpenApiRouter, routes};
             use $crate::routes::{__path_health, health};
-            use $crate::{ApiDoc, Context, serve_http};
+            use $crate::{ApiDoc, serve_http};
 
             #[pyclass(name = $name)]
             pub(crate) struct $pyname(Arc<$handler>);
@@ -206,9 +228,7 @@ pub mod python {
                 #[instrument(skip(inner))]
                 #[new]
                 fn new(inner: PyObject) -> Self {
-                    Self {
-                        0: Arc::new($handler { inner }),
-                    }
+                    Self(Arc::new($handler { inner }))
                 }
 
                 #[instrument(skip_all)]

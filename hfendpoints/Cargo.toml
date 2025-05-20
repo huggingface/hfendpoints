@@ -12,6 +12,7 @@ hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional 
 hfendpoints-core = { path = "../hfendpoints-core" }
 hfendpoints-http = { path = "../hfendpoints-http" }
 hfendpoints-tasks = { path = "../hfendpoints-tasks" }
+hfendpoints-inference = { path = "../hfendpoints-inference", optional = true }
 hfendpoints-openai = { path = "../hfendpoints-openai", optional = true }
 
 pyo3 = { workspace = true, optional = true, features = ["auto-initialize", "extension-module"] }
@@ -28,6 +29,8 @@ python = [
     "hfendpoints-core/python",
     "hfendpoints-http/python",
     "hfendpoints-tasks/python",
+    "hfendpoints-inference/python",
     "hfendpoints-openai/python",
 ]
 openai = ["hfendpoints-openai"]
+hfinference = ["hfendpoints-inference"]

@@ -1,5 +1,5 @@
 use axum::http::{HeaderName, HeaderValue};
-use headers::{Error, Header};
+use axum_extra::headers::{Error, Header};
 use std::borrow::Cow;
 use std::ops::Deref;
 use tracing::error;
@@ -32,7 +32,7 @@ impl Header for RequestId {
         Self: Sized,
         I: Iterator<Item = &'i HeaderValue>,
     {
-        let value = values.next().ok_or_else(headers::Error::invalid)?;
+        let value = values.next().ok_or_else(Error::invalid)?;
 
         Ok(RequestId(Cow::from(
             value

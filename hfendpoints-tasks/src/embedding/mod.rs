@@ -7,6 +7,7 @@ use utoipa::ToSchema;
 use pyo3::prelude::{pyclass, IntoPyObject, IntoPyObjectRef};
 
 #[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg_attr(test, derive(Serialize))]
 #[cfg_attr(feature = "python", pyclass(eq, eq_int))]
 #[derive(Copy, Clone, Deserialize, Eq, PartialEq, ToSchema)]
 #[serde(rename_all = "lowercase")]
@@ -26,6 +27,7 @@ pub enum EmbeddingInput {
 }
 
 #[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg_attr(test, derive(Serialize))]
 #[cfg_attr(feature = "python", derive(IntoPyObject))]
 #[derive(Clone, Default, Deserialize, ToSchema)]
 pub struct EmbeddingParams {

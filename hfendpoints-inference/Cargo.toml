@@ -1,0 +1,24 @@
+[package]
+name = "hfendpoints-inference"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = { workspace = true, features = ["macros", "json"] }
+axum-extra = { version = "0.10", features = ["typed-header"] }
+headers = "0.4.0"
+hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
+hfendpoints-core = { path = "../hfendpoints-core" }
+hfendpoints-http = { path = "../hfendpoints-http" }
+hfendpoints-tasks = { path = "../hfendpoints-tasks" }
+pyo3 = { workspace = true, optional = true, features = [] }
+pyo3-async-runtimes = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"] }
+tokio = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+utoipa-axum = { workspace = true }
+
+[features]
+default = []
+python = ["hfendpoints-binding-python", "hfendpoints-core/python", "hfendpoints-http/python", "hfendpoints-tasks/python", "pyo3", "pyo3-async-runtimes"]
