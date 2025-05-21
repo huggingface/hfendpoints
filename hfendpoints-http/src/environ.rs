@@ -140,9 +140,11 @@ impl From<Timeout> for TimeoutLayer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::env;
 
     #[test]
+    #[serial]
     fn test_timeout_with_valid_small_integer() {
         unsafe {
             env::set_var(Timeout::ENV_VAR_NAME, "5");
@@ -152,6 +154,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_timeout_with_invalid_string() {
         unsafe {
             env::set_var(Timeout::ENV_VAR_NAME, "invalid");

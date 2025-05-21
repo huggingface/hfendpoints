@@ -21,6 +21,9 @@ utoipa = { version = "5.3" }
 utoipa-axum = "0.2"
 utoipa-scalar = { version = "0.3", features = ["axum"] }
 
+[dev-dependencies]
+serial_test = "3"
+
 [features]
 default = []
 python = ["hfendpoints-binding-python/tokio", "hfendpoints-core/python", "hfendpoints-tasks/python", "pyo3", "pyo3-async-runtimes"]
