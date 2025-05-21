@@ -15,6 +15,7 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
 /// One segment of the transcribed text and the corresponding details.
+#[allow(dead_code)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 pub struct Segment {
@@ -52,6 +53,7 @@ pub struct Segment {
     no_speech_prob: f32,
 }
 
+#[allow(dead_code)]
 #[derive(Default)]
 pub struct SegmentBuilder {
     id: Option<u16>,
@@ -66,6 +68,7 @@ pub struct SegmentBuilder {
     no_speech_prob: Option<f32>,
 }
 
+#[allow(dead_code)]
 impl SegmentBuilder {
     pub fn id(mut self, id: u16) -> Self {
         self.id = Some(id);
@@ -146,6 +149,7 @@ impl SegmentBuilder {
 }
 
 impl Segment {
+    #[allow(dead_code)]
     pub fn builder() -> SegmentBuilder {
         SegmentBuilder::default()
     }
@@ -176,40 +180,41 @@ pub struct VerboseTranscription {
     segments: Vec<Segment>,
 }
 
-#[cfg_attr(debug_assertions, derive(Debug))]
-#[derive(Clone, Serialize, ToSchema)]
-#[serde(tag = "type")]
-#[serde(rename = "transcript.text.delta")]
-pub struct Delta {
-    /// The text delta that was additionally transcribed.
-    pub(crate) delta: String,
-    // TODO: logprobs -> https://platform.openai.com/docs/api-reference/audio/transcript-text-delta-event#audio/transcript-text-delta-event-logprobs
-}
-
-#[cfg_attr(debug_assertions, derive(Debug))]
-#[derive(Clone, Serialize, ToSchema)]
-#[serde(tag = "type")]
-#[serde(rename = "transcript.text.done")]
-pub struct Done {
-    /// The text that was transcribed.
-    pub(crate) text: String,
-    // TODO: logprobs -> https://platform.openai.com/docs/api-reference/audio/transcript-text-done-event#audio/transcript-text-done-event-logprobs
-}
-
-#[cfg_attr(debug_assertions, derive(Debug))]
-#[derive(Clone, Serialize, ToSchema)]
-#[serde(untagged)]
-pub enum StreamEvent {
-    /// Emitted when there is an additional text delta.
-    /// This is also the first event emitted when the transcription starts.
-    /// Only emitted when you create a transcription with the Stream parameter set to true.
-    Delta(Delta),
-
-    /// Emitted when the transcription is complete.
-    /// Contains the complete transcription text.
-    /// Only emitted when you create a transcription with the Stream parameter set to true.
-    Done(Done),
-}
+// TODO: For future use
+// #[cfg_attr(debug_assertions, derive(Debug))]
+// #[derive(Clone, Serialize, ToSchema)]
+// #[serde(tag = "type")]
+// #[serde(rename = "transcript.text.delta")]
+// pub struct Delta {
+//     /// The text delta that was additionally transcribed.
+//     pub(crate) delta: String,
+//     // TODO: logprobs -> https://platform.openai.com/docs/api-reference/audio/transcript-text-delta-event#audio/transcript-text-delta-event-logprobs
+// }
+//
+// #[cfg_attr(debug_assertions, derive(Debug))]
+// #[derive(Clone, Serialize, ToSchema)]
+// #[serde(tag = "type")]
+// #[serde(rename = "transcript.text.done")]
+// pub struct Done {
+//     /// The text that was transcribed.
+//     pub(crate) text: String,
+//     // TODO: logprobs -> https://platform.openai.com/docs/api-reference/audio/transcript-text-done-event#audio/transcript-text-done-event-logprobs
+// }
+//
+// #[cfg_attr(debug_assertions, derive(Debug))]
+// #[derive(Clone, Serialize, ToSchema)]
+// #[serde(untagged)]
+// pub enum StreamEvent {
+//     /// Emitted when there is an additional text delta.
+//     /// This is also the first event emitted when the transcription starts.
+//     /// Only emitted when you create a transcription with the Stream parameter set to true.
+//     Delta(Delta),
+//
+//     /// Emitted when the transcription is complete.
+//     /// Contains the complete transcription text.
+//     /// Only emitted when you create a transcription with the Stream parameter set to true.
+//     Done(Done),
+// }
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Copy, Clone, Deserialize, ToSchema)]
@@ -249,6 +254,7 @@ impl IntoResponse for TranscriptionResponse {
 }
 
 /// Transcribes audio into the input language.
+#[allow(dead_code)]
 #[derive(ToSchema)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 struct TranscriptionForm {
@@ -415,35 +421,36 @@ impl From<TranscriptionRouter> for OpenApiRouter {
 
 #[cfg(test)]
 mod tests {
-    use crate::audio::transcription::{Delta, Done, Segment, StreamEvent};
+    // use crate::audio::transcription::{Delta, Done, Segment, StreamEvent};
+    use crate::audio::transcription::Segment;
 
-    #[test]
-    fn serialize_stream_event_delta() {
-        let delta = StreamEvent::Delta(Delta {
-            delta: String::from("Hello world"),
-        });
-        let delta_json =
-            serde_json::to_string(&delta).expect("Failed to serialize StreamEvent::Delta");
-
-        assert_eq!(
-            &delta_json,
-            r#"{"type":"transcript.text.delta","delta":"Hello world"}"#
-        );
-    }
-
-    #[test]
-    fn serialize_stream_event_done() {
-        let done = StreamEvent::Done(Done {
-            text: String::from("Hello world"),
-        });
-        let done_json =
-            serde_json::to_string(&done).expect("Failed to serialize StreamEvent::Done");
-
-        assert_eq!(
-            &done_json,
-            r#"{"type":"transcript.text.done","text":"Hello world"}"#
-        );
-    }
+    // #[test]
+    // fn serialize_stream_event_delta() {
+    //     let delta = StreamEvent::Delta(Delta {
+    //         delta: String::from("Hello world"),
+    //     });
+    //     let delta_json =
+    //         serde_json::to_string(&delta).expect("Failed to serialize StreamEvent::Delta");
+    //
+    //     assert_eq!(
+    //         &delta_json,
+    //         r#"{"type":"transcript.text.delta","delta":"Hello world"}"#
+    //     );
+    // }
+    //
+    // #[test]
+    // fn serialize_stream_event_done() {
+    //     let done = StreamEvent::Done(Done {
+    //         text: String::from("Hello world"),
+    //     });
+    //     let done_json =
+    //         serde_json::to_string(&done).expect("Failed to serialize StreamEvent::Done");
+    //
+    //     assert_eq!(
+    //         &done_json,
+    //         r#"{"type":"transcript.text.done","text":"Hello world"}"#
+    //     );
+    // }
 
     #[test]
     fn segment_builder_all_field_set() {

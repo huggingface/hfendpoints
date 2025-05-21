@@ -93,6 +93,7 @@ impl IntoResponse for OpenAiEmbeddingResponse {
     }
 }
 
+#[allow(dead_code)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(test, derive(Serialize))]
 #[derive(Clone, Deserialize, ToSchema)]

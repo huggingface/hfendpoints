@@ -15,7 +15,76 @@ pub enum HandlerError {
     Implementation(Cow<'static, str>),
 }
 
+/// A trait that represents a generic handler for processing requests asynchronously.
 ///
+/// This trait defines how to handle a specific `Request` type and produce a `Response` type
+/// using asynchronous operations.
+/// It is commonly used in scenarios
+/// where a request-response mechanism is required with support for asynchronous execution,
+/// such as in servers or middleware systems.
+///
+/// # Associated Types
+///
+/// * `Request`: The type of the incoming request that this handler processes.
+/// * `Response`: The type of the outgoing response produced by the handler.
+///
+/// # Required Methods
+///
+/// ## `on_request`
+///
+/// Handles the incoming request and returns a `Future` that resolves to a `Result` containing
+/// either the processed `Response` or an `Error` if the operation fails.
+///
+/// # Arguments
+///
+/// - `request`: The incoming request of type `Self::Request` that needs to be handled.
+///
+/// # Returns
+///
+/// Returns a future that resolves to a `Result` where:
+/// - `Ok(Self::Response)`: Indicates successful processing of the request.
+/// - `Err(Error)`: Indicates an error occurred during processing.
+///
+/// The future must be `Send`, making it suitable for use in multithreaded contexts.
+///
+/// # Examples
+///
+/// ```
+/// use hfendpoints_core::{EndpointResult, Handler};
+/// use std::future::Future;
+/// use std::pin::Pin;
+/// use std::task::{Context, Poll};
+///
+/// struct MyHandler;
+///
+/// impl Handler for MyHandler {
+///     type Request = String;
+///     type Response = String;
+///
+///     fn on_request(
+///         &self,
+///         request: Self::Request,
+///     ) -> impl Future<Output = EndpointResult<Self::Response>> + Send {
+///         async move {
+///             // Process the request and return the response.
+///             Ok(format!("Processed: {}", request))
+///         }
+///     }
+/// }
+///
+/// // Example usage
+/// #[tokio::main]
+/// async fn main() {
+///     let handler = MyHandler;
+///     let response = handler.on_request("Test request".to_string()).await;
+///     match response {
+///         Ok(res) => println!("Response: {}", res),
+///         Err(err) => println!("Error: {:?}", err),
+///     }
+/// }
+/// ```
+///
+/// Note: In the example, replace `Error` with a concrete error type that suits your use case.
 pub trait Handler {
     type Request;
     type Response;

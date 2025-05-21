@@ -14,6 +14,7 @@ pub struct Segment {
 }
 
 /// Describe all the parameters to tune the underlying transcription process
+#[allow(dead_code)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[cfg_attr(feature = "python", pyclass(name = "TranscriptionParams", frozen))]
 #[derive(Deserialize, ToSchema)]
@@ -126,7 +127,7 @@ pub(crate) mod python {
 
         fn __repr__(&self) -> String {
             let text = match &self.0.output {
-                Transcription::Text(text) => &text,
+                Transcription::Text(text) => text,
                 Transcription::Detailed(detailed) => &detailed.text,
             };
 
