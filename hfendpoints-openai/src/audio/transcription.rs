@@ -372,7 +372,7 @@ type TranscriptionRequestWithContext = RequestWithContext<TranscriptionRequest>;
 
 #[utoipa::path(
     post,
-    path = "/audio/transcriptions",
+    path = "/v1/audio/transcriptions",
     tag = AUDIO_TAG,
     request_body(content = TranscriptionForm, content_type = "multipart/form-data"),
     responses(

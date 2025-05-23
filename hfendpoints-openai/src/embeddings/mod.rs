@@ -110,7 +110,7 @@ type OpenAiEmbeddingRequestWithContext = RequestWithContext<OpenAiEmbeddingReque
 
 #[utoipa::path(
     post,
-    path = "/embeddings",
+    path = "/v1/embeddings",
     tag = EMBEDDINGS_TAG,
     request_body(content = OpenAiEmbeddingRequest, content_type = "application/json"),
     responses(
