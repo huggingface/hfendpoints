@@ -159,12 +159,8 @@ pub mod python {
                     let locals = Python::with_gil(|py| TASK_LOCALS.get().unwrap().clone_ref(py));
                     let (request, context) = request;
 
-                    debug!("[INGRESS] request: {request:?}");
-
                     // Convert the underlying frontend-specific message to the I/O adapter layer
                     let request = $pyrequest(request.try_into()?);
-
-                    debug!("[INGRESS] successfully converted request");
 
                     // Create the coroutine on the Python side to await through tokio
                     let coroutine = self.materialize_coroutine(request, context, &locals)?;
