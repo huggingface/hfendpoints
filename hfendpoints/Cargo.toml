@@ -1,6 +1,6 @@
 [package]
 name = "hfendpoints"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 
 [lib]
@@ -9,8 +9,12 @@ crate-type = ["cdylib"]
 
 [dependencies]
 hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
-hfendpoints-core = { path = "../hfendpoints-core", optional = true }
-hfendpoints-openai = { path = "../hfendpoints-openai" }
+hfendpoints-core = { path = "../hfendpoints-core" }
+hfendpoints-http = { path = "../hfendpoints-http" }
+hfendpoints-tasks = { path = "../hfendpoints-tasks" }
+hfendpoints-inference = { path = "../hfendpoints-inference", optional = true }
+hfendpoints-openai = { path = "../hfendpoints-openai", optional = true }
+
 pyo3 = { workspace = true, optional = true, features = ["auto-initialize", "extension-module"] }
 pyo3-log = { version = "0.12.3", optional = true }
 tracing = "0.1"
@@ -23,5 +27,10 @@ python = [
     "pyo3-log",
     "hfendpoints-binding-python",
     "hfendpoints-core/python",
-    "hfendpoints-openai/python"
+    "hfendpoints-http/python",
+    "hfendpoints-tasks/python",
+    "hfendpoints-inference/python",
+    "hfendpoints-openai/python",
 ]
+openai = ["hfendpoints-openai"]
+hfinference = ["hfendpoints-inference"]

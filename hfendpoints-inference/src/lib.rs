@@ -1,7 +1,4 @@
-pub(crate) mod audio;
-pub(crate) mod embeddings;
-
-pub use hfendpoints_http::Context;
+mod embeddings;
 
 #[cfg(feature = "python")]
 pub mod python {

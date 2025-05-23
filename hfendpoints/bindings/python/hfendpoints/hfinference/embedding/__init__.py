@@ -1,0 +1,1 @@
+from hfendpoints._hfendpoints.hfinference.embedding import EmbeddingEndpoint

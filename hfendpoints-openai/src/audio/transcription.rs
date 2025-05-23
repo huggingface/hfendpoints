@@ -1,13 +1,11 @@
-use crate::audio::AUDIO_TAG;
-use crate::context::Context;
-use crate::headers::RequestId;
-use crate::{OpenAiError, OpenAiResult, RequestWithContext};
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Multipart, State};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use axum_extra::TypedHeader;
-use hfendpoints_core::{EndpointContext, EndpointResult, Error};
+use hfendpoints_core::{EndpointContext, EndpointResult};
+use hfendpoints_http::headers::RequestId;
+use hfendpoints_http::{Context, HttpError, HttpResult, RequestWithContext, AUDIO_TAG};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tokio::sync::mpsc::UnboundedSender;
@@ -16,11 +14,8 @@ use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
-#[cfg(feature = "python")]
-use pyo3::prelude::*;
-
 /// One segment of the transcribed text and the corresponding details.
-#[cfg_attr(feature = "python", pyclass(frozen))]
+#[allow(dead_code)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 pub struct Segment {
@@ -58,6 +53,7 @@ pub struct Segment {
     no_speech_prob: f32,
 }
 
+#[allow(dead_code)]
 #[derive(Default)]
 pub struct SegmentBuilder {
     id: Option<u16>,
@@ -72,6 +68,7 @@ pub struct SegmentBuilder {
     no_speech_prob: Option<f32>,
 }
 
+#[allow(dead_code)]
 impl SegmentBuilder {
     pub fn id(mut self, id: u16) -> Self {
         self.id = Some(id);
@@ -123,27 +120,25 @@ impl SegmentBuilder {
         self
     }
 
-    pub fn build(self) -> OpenAiResult<Segment> {
+    pub fn build(self) -> HttpResult<Segment> {
         Ok(Segment {
-            id: self.id.ok_or(OpenAiError::Validation(String::from(
+            id: self.id.ok_or(HttpError::Validation(String::from(
                 "Segment::id is not set",
             )))?,
-            start: self.start.ok_or(OpenAiError::Validation(String::from(
+            start: self.start.ok_or(HttpError::Validation(String::from(
                 "Segment::start is not set",
             )))?,
-            end: self.end.ok_or(OpenAiError::Validation(String::from(
+            end: self.end.ok_or(HttpError::Validation(String::from(
                 "Segment::end is not set",
             )))?,
             seek: self.seek.unwrap_or(0),
-            temperature: self
-                .temperature
-                .ok_or(OpenAiError::Validation(String::from(
-                    "Segment::temperature is not set",
-                )))?,
-            text: self.text.ok_or(OpenAiError::Validation(String::from(
+            temperature: self.temperature.ok_or(HttpError::Validation(String::from(
+                "Segment::temperature is not set",
+            )))?,
+            text: self.text.ok_or(HttpError::Validation(String::from(
                 "Segment::text is not set",
             )))?,
-            tokens: self.tokens.ok_or(OpenAiError::Validation(String::from(
+            tokens: self.tokens.ok_or(HttpError::Validation(String::from(
                 "Segment::tokens is not set",
             )))?,
             avg_logprob: self.avg_logprob.unwrap_or(0.0),
@@ -154,13 +149,13 @@ impl SegmentBuilder {
 }
 
 impl Segment {
+    #[allow(dead_code)]
     pub fn builder() -> SegmentBuilder {
         SegmentBuilder::default()
     }
 }
 
-/// Represents a transcription response returned by model, based on the provided input.
-#[cfg_attr(feature = "python", pyclass(frozen))]
+/// Represents a transcription response returned by the model, based on the provided input.
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 pub struct Transcription {
@@ -168,8 +163,7 @@ pub struct Transcription {
     text: String,
 }
 
-/// Represents a verbose json transcription response returned by model, based on the provided input.
-#[cfg_attr(feature = "python", pyclass(frozen))]
+/// Represents a verbose JSON transcription response returned by the model, based on the provided input.
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 pub struct VerboseTranscription {
@@ -186,45 +180,42 @@ pub struct VerboseTranscription {
     segments: Vec<Segment>,
 }
 
-#[cfg_attr(feature = "python", pyclass(frozen))]
-#[cfg_attr(debug_assertions, derive(Debug))]
-#[derive(Clone, Serialize, ToSchema)]
-#[serde(tag = "type")]
-#[serde(rename = "transcript.text.delta")]
-pub struct Delta {
-    /// The text delta that was additionally transcribed.
-    pub(crate) delta: String,
-    // TODO: logprobs -> https://platform.openai.com/docs/api-reference/audio/transcript-text-delta-event#audio/transcript-text-delta-event-logprobs
-}
+// TODO: For future use
+// #[cfg_attr(debug_assertions, derive(Debug))]
+// #[derive(Clone, Serialize, ToSchema)]
+// #[serde(tag = "type")]
+// #[serde(rename = "transcript.text.delta")]
+// pub struct Delta {
+//     /// The text delta that was additionally transcribed.
+//     pub(crate) delta: String,
+//     // TODO: logprobs -> https://platform.openai.com/docs/api-reference/audio/transcript-text-delta-event#audio/transcript-text-delta-event-logprobs
+// }
+//
+// #[cfg_attr(debug_assertions, derive(Debug))]
+// #[derive(Clone, Serialize, ToSchema)]
+// #[serde(tag = "type")]
+// #[serde(rename = "transcript.text.done")]
+// pub struct Done {
+//     /// The text that was transcribed.
+//     pub(crate) text: String,
+//     // TODO: logprobs -> https://platform.openai.com/docs/api-reference/audio/transcript-text-done-event#audio/transcript-text-done-event-logprobs
+// }
+//
+// #[cfg_attr(debug_assertions, derive(Debug))]
+// #[derive(Clone, Serialize, ToSchema)]
+// #[serde(untagged)]
+// pub enum StreamEvent {
+//     /// Emitted when there is an additional text delta.
+//     /// This is also the first event emitted when the transcription starts.
+//     /// Only emitted when you create a transcription with the Stream parameter set to true.
+//     Delta(Delta),
+//
+//     /// Emitted when the transcription is complete.
+//     /// Contains the complete transcription text.
+//     /// Only emitted when you create a transcription with the Stream parameter set to true.
+//     Done(Done),
+// }
 
-#[cfg_attr(feature = "python", pyclass(frozen))]
-#[cfg_attr(debug_assertions, derive(Debug))]
-#[derive(Clone, Serialize, ToSchema)]
-#[serde(tag = "type")]
-#[serde(rename = "transcript.text.done")]
-pub struct Done {
-    /// The text that was transcribed.
-    pub(crate) text: String,
-    // TODO: logprobs -> https://platform.openai.com/docs/api-reference/audio/transcript-text-done-event#audio/transcript-text-done-event-logprobs
-}
-
-#[cfg_attr(feature = "python", pyclass(frozen))]
-#[cfg_attr(debug_assertions, derive(Debug))]
-#[derive(Clone, Serialize, ToSchema)]
-#[serde(untagged)]
-pub enum StreamEvent {
-    /// Emitted when there is an additional text delta.
-    /// This is also the first event emitted when the transcription starts.
-    /// Only emitted when you create a transcription with the Stream parameter set to true.
-    Delta(Delta),
-
-    /// Emitted when the transcription is complete.
-    /// Contains the complete transcription text.
-    /// Only emitted when you create a transcription with the Stream parameter set to true.
-    Done(Done),
-}
-
-#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Copy, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -241,8 +232,7 @@ impl Default for ResponseFormat {
     }
 }
 
-/// The transcription object, a verbose transcription object or a stream of transcript events.
-#[cfg_attr(feature = "python", pyclass(frozen))]
+/// The transcription object, a verbose transcription object, or a stream of transcript events.
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone, Serialize, ToSchema)]
 pub enum TranscriptionResponse {
@@ -264,6 +254,7 @@ impl IntoResponse for TranscriptionResponse {
 }
 
 /// Transcribes audio into the input language.
+#[allow(dead_code)]
 #[derive(ToSchema)]
 #[cfg_attr(debug_assertions, derive(Debug))]
 struct TranscriptionForm {
@@ -272,7 +263,7 @@ struct TranscriptionForm {
     file: String,
 
     /// The language of the input audio.
-    /// Supplying the input language in ISO-639-1 (e.g. en) format will improve accuracy and latency.
+    /// Supplying the input language in ISO-639-1 (eg. en) format will improve accuracy and latency.
     language: Option<String>,
 
     /// Not used, here for compatibility purpose with OpenAI Platform
@@ -291,7 +282,6 @@ struct TranscriptionForm {
     response_format: Option<ResponseFormat>,
 }
 
-#[cfg_attr(feature = "python", pyclass(frozen))]
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(Clone)]
 pub struct TranscriptionRequest {
@@ -312,10 +302,10 @@ impl TranscriptionRequest {
         prompt: Option<String>,
         temperature: Option<f32>,
         response_format: Option<String>,
-    ) -> OpenAiResult<Self> {
+    ) -> HttpResult<Self> {
         let file = match file {
             Some(file) => Ok(file),
-            None => Err(OpenAiError::Validation(
+            None => Err(HttpError::Validation(
                 "Required parameter 'file' was not provided".to_string(),
             )),
         }?;
@@ -325,7 +315,7 @@ impl TranscriptionRequest {
             "json" => Ok(ResponseFormat::Json),
             "verbose_json" => Ok(ResponseFormat::VerboseJson),
             "text" => Ok(ResponseFormat::Text),
-            _ => Err(OpenAiError::Validation(format!(
+            _ => Err(HttpError::Validation(format!(
                 "Unknown response_format: {response_format}. Possible values are: 'json', 'verbose_json', 'text'."
             ))),
         }?;
@@ -344,13 +334,13 @@ impl TranscriptionRequest {
     }
 
     #[instrument(skip_all)]
-    async fn try_from_multipart(mut multipart: Multipart) -> OpenAiResult<Self> {
-        let mut file: OpenAiResult<Option<Bytes>> = Ok(None);
+    async fn try_from_multipart(mut multipart: Multipart) -> HttpResult<Self> {
+        let mut file: HttpResult<Option<Bytes>> = Ok(None);
         let mut content_type: Option<String> = None;
-        let mut language: OpenAiResult<Option<String>> = Ok(None);
-        let mut prompt: OpenAiResult<Option<String>> = Ok(None);
-        let mut temperature: OpenAiResult<Option<f32>> = Ok(None);
-        let mut response_format: OpenAiResult<Option<String>> = Ok(None);
+        let mut language: HttpResult<Option<String>> = Ok(None);
+        let mut prompt: HttpResult<Option<String>> = Ok(None);
+        let mut temperature: HttpResult<Option<f32>> = Ok(None);
+        let mut response_format: HttpResult<Option<String>> = Ok(None);
 
         while let Some(field) = multipart.next_field().await? {
             let name = field.name().unwrap().to_string();
@@ -363,7 +353,7 @@ impl TranscriptionRequest {
                 "prompt" => prompt = Ok(Some(field.text().await?.to_string())),
                 "temperature" => temperature = Ok(Some(f32::from_str(&field.text().await?)?)),
                 "response_format" => response_format = Ok(Some(field.text().await?.to_string())),
-                _ => return Err(OpenAiError::Validation(format!("Unknown field: {name}"))),
+                _ => return Err(HttpError::Validation(format!("Unknown field: {name}"))),
             }
         }
 
@@ -382,7 +372,7 @@ type TranscriptionRequestWithContext = RequestWithContext<TranscriptionRequest>;
 
 #[utoipa::path(
     post,
-    path = "/audio/transcriptions",
+    path = "/v1/audio/transcriptions",
     tag = AUDIO_TAG,
     request_body(content = TranscriptionForm, content_type = "multipart/form-data"),
     responses(
@@ -394,7 +384,7 @@ pub async fn transcribe(
     State(state): State<EndpointContext<TranscriptionRequestWithContext, TranscriptionResponse>>,
     request_id: TypedHeader<RequestId>,
     multipart: Multipart,
-) -> OpenAiResult<TranscriptionResponse> {
+) -> HttpResult<TranscriptionResponse> {
     // Decode request
     let request = TranscriptionRequest::try_from_multipart(multipart).await?;
 
@@ -402,11 +392,11 @@ pub async fn transcribe(
     let ctx = Context::new(request_id.0);
 
     // Ask for the inference thread to handle it and wait for answers
-    let mut egress = state.schedule((request, ctx));
+    let mut egress = state.schedule((request, ctx))?;
     if let Some(response) = egress.recv().await {
         Ok(response?)
     } else {
-        Err(OpenAiError::NoResponse)
+        Err(HttpError::NoResponse)
     }
 }
 
@@ -414,7 +404,7 @@ pub async fn transcribe(
 /// [OpenAi Platform compatible Transcription endpoint](https://platform.openai.com/docs/api-reference/audio/createTranscription)
 #[derive(Clone)]
 pub struct TranscriptionRouter(
-    pub UnboundedSender<(
+    pub  UnboundedSender<(
         TranscriptionRequestWithContext,
         UnboundedSender<EndpointResult<TranscriptionResponse>>,
     )>,
@@ -429,170 +419,38 @@ impl From<TranscriptionRouter> for OpenApiRouter {
     }
 }
 
-#[cfg(feature = "python")]
-pub(crate) mod python {
-    use crate::audio::transcription::{ResponseFormat, Segment, Transcription, TranscriptionRequest, TranscriptionResponse, VerboseTranscription};
-    use hfendpoints_binding_python::fill_view_from_readonly_data;
-    use pyo3::ffi::Py_buffer;
-    use pyo3::prelude::*;
-    use std::ffi::CString;
-    use tracing::{debug, instrument};
-
-    #[pyclass(frozen, eq, eq_int)]
-    #[derive(Eq, PartialEq)]
-    pub enum TranscriptionResponseKind {
-        #[pyo3(name = "TEXT")]
-        Text = 1,
-
-        #[pyo3(name = "JSON")]
-        Json = 2,
-
-        #[pyo3(name = "VERBOSE_JSON")]
-        VerboseJson = 3,
-    }
-
-
-    #[pymethods]
-    impl Segment {
-        #[new]
-        pub fn new(
-            id: u16,
-            start: f32,
-            end: f32,
-            seek: u16,
-            temperature: f32,
-            text: String,
-            tokens: Vec<u32>,
-            avg_logprob: f32,
-            compression_ratio: f32,
-            no_speech_prob: f32,
-        ) -> PyResult<Self> {
-            Ok(Self {
-                id,
-                start,
-                end,
-                seek,
-                temperature,
-                text,
-                tokens,
-                avg_logprob,
-                compression_ratio,
-                no_speech_prob,
-            })
-        }
-    }
-
-    #[pymethods]
-    impl Transcription {
-        #[new]
-        pub fn new(text: String) -> Self {
-            Self { text }
-        }
-    }
-
-    #[pymethods]
-    impl VerboseTranscription {
-        #[new]
-        pub fn new(text: String, duration: f32, language: String, segments: Vec<Segment>) -> Self {
-            Self {
-                text,
-                duration,
-                language,
-                segments,
-            }
-        }
-    }
-
-    #[pymethods]
-    impl TranscriptionRequest {
-        #[instrument(skip(slf, buffer))]
-        pub unsafe fn __getbuffer__(slf: Bound<'_, Self>, buffer: *mut Py_buffer, flags: i32) -> PyResult<()> {
-            debug!("Acquiring a memoryview over audio data (flags={})", flags);
-            unsafe { fill_view_from_readonly_data(buffer, flags, &slf.borrow().file, slf.into_any()) }
-        }
-
-        #[instrument(skip_all)]
-        pub unsafe fn __releasebuffer__(&self, buffer: *mut Py_buffer) {
-            debug!("Releasing Python memoryview");
-            // Release memory held by the format string
-            drop(unsafe { CString::from_raw((*buffer).format) });
-        }
-
-        #[getter]
-        pub fn language(&self) -> &str {
-            &self.language
-        }
-
-        #[getter]
-        pub fn prompt(&self) -> &Option<String> {
-            &self.prompt
-        }
-
-        #[getter]
-        pub fn temperature(&self) -> f32 {
-            self.temperature
-        }
-
-        #[getter]
-        pub fn response_kind(&self) -> PyResult<TranscriptionResponseKind> {
-            match self.response_format {
-                ResponseFormat::Json => Ok(TranscriptionResponseKind::Json),
-                ResponseFormat::Text => Ok(TranscriptionResponseKind::Text),
-                ResponseFormat::VerboseJson => Ok(TranscriptionResponseKind::VerboseJson)
-            }
-        }
-    }
-
-    #[pymethods]
-    impl TranscriptionResponse {
-        #[staticmethod]
-        fn text(content: String) -> Self {
-            Self::Text(content)
-        }
-
-        #[staticmethod]
-        fn json(content: String) -> Self {
-            Self::Json(Transcription { text: content })
-        }
-
-        #[staticmethod]
-        fn verbose(transcription: VerboseTranscription) -> Self {
-            Self::VerboseJson(transcription)
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::audio::transcription::{Delta, Done, Segment, StreamEvent};
+    // use crate::audio::transcription::{Delta, Done, Segment, StreamEvent};
+    use crate::audio::transcription::Segment;
 
-    #[test]
-    fn serialize_stream_event_delta() {
-        let delta = StreamEvent::Delta(Delta {
-            delta: String::from("Hello world"),
-        });
-        let delta_json =
-            serde_json::to_string(&delta).expect("Failed to serialize StreamEvent::Delta");
-
-        assert_eq!(
-            &delta_json,
-            r#"{"type":"transcript.text.delta","delta":"Hello world"}"#
-        );
-    }
-
-    #[test]
-    fn serialize_stream_event_done() {
-        let done = StreamEvent::Done(Done {
-            text: String::from("Hello world"),
-        });
-        let done_json =
-            serde_json::to_string(&done).expect("Failed to serialize StreamEvent::Done");
-
-        assert_eq!(
-            &done_json,
-            r#"{"type":"transcript.text.done","text":"Hello world"}"#
-        );
-    }
+    // #[test]
+    // fn serialize_stream_event_delta() {
+    //     let delta = StreamEvent::Delta(Delta {
+    //         delta: String::from("Hello world"),
+    //     });
+    //     let delta_json =
+    //         serde_json::to_string(&delta).expect("Failed to serialize StreamEvent::Delta");
+    //
+    //     assert_eq!(
+    //         &delta_json,
+    //         r#"{"type":"transcript.text.delta","delta":"Hello world"}"#
+    //     );
+    // }
+    //
+    // #[test]
+    // fn serialize_stream_event_done() {
+    //     let done = StreamEvent::Done(Done {
+    //         text: String::from("Hello world"),
+    //     });
+    //     let done_json =
+    //         serde_json::to_string(&done).expect("Failed to serialize StreamEvent::Done");
+    //
+    //     assert_eq!(
+    //         &done_json,
+    //         r#"{"type":"transcript.text.done","text":"Hello world"}"#
+    //     );
+    // }
 
     #[test]
     fn segment_builder_all_field_set() {

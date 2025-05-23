@@ -1,0 +1,29 @@
+[package]
+name = "hfendpoints-http"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = { version = "0.8", features = ["multipart", "tracing"] }
+axum-extra = { version = "0.10", features = ["typed-header", "tracing"] }
+hfendpoints-binding-python = { path = "../hfendpoints-binding-python", optional = true }
+hfendpoints-core = { path = "../hfendpoints-core" }
+hfendpoints-tasks = { path = "../hfendpoints-tasks" }
+pyo3 = { workspace = true, optional = true }
+pyo3-async-runtimes = { workspace = true, optional = true }
+serde = { workspace = true }
+thiserror = "2.0"
+tokio = { workspace = true, features = ["net", "parking_lot", "rt-multi-thread"] }
+tower = { version = "0.5", features = ["tracing", "tokio"] }
+tower-http = { version = "0.6", features = ["request-id", "tracing", "trace", "timeout"] }
+tracing = { workspace = true }
+utoipa = { version = "5.3" }
+utoipa-axum = "0.2"
+utoipa-scalar = { version = "0.3", features = ["axum"] }
+
+[dev-dependencies]
+serial_test = "3"
+
+[features]
+default = []
+python = ["hfendpoints-binding-python/tokio", "hfendpoints-core/python", "hfendpoints-tasks/python", "pyo3", "pyo3-async-runtimes"]

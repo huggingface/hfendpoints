@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
+from .frontend import Frontend
 from ..errors import UnsupportedModelArchitecture
 
 if TYPE_CHECKING:
@@ -24,6 +25,9 @@ class EndpointConfig:
     # Port on the interface the endpoint will be listening to incoming requests
     port: int
 
+    # Which API specifications to use
+    frontend: Frontend
+
     # Model to use for this endpoint
     model_id: str
 
@@ -39,6 +43,7 @@ class EndpointConfig:
         return EndpointConfig(
             interface=os.environ.get("INTERFACE", "0.0.0.0"),
             port=int(os.environ.get("PORT", 8000)),
+            frontend=Frontend(os.environ.get("FRONTEND", "hf_inference")),
             model_id=os.environ.get("HF_MODEL", "unknown"),
             repository=Path(os.environ.get("MODEL_ID", os.environ.get("HF_MODEL", "/repository"))),
             is_debug=os.environ.get("MODEL_ID", "/repository") != "/repository"
