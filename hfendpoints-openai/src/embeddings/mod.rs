@@ -251,7 +251,7 @@ mod tests {
     ) -> Router {
         let state = EndpointContext::new(sender);
         Router::new()
-            .route("/embeddings", post(embed))
+            .route("/v1/embeddings", post(embed))
             .with_state(state)
             .layer(TimeoutLayer::new(Duration::from_secs(5)))
     }
@@ -288,7 +288,7 @@ mod tests {
 
         // Build the HTTP request
         let request = Request::builder()
-            .uri("/embeddings")
+            .uri("/v1/embeddings")
             .method(http::Method::POST)
             .header("content-type", "application/json")
             .header("x-request-id", "test-request-id")
@@ -320,7 +320,7 @@ mod tests {
         let app = create_test_app(tx);
 
         let request = Request::builder()
-            .uri("/embeddings")
+            .uri("/v1/embeddings")
             .method(http::Method::POST)
             .header("content-type", "application/json")
             .body(Body::from(
@@ -372,7 +372,7 @@ mod tests {
         let app = create_test_app(tx);
 
         let request = Request::builder()
-            .uri("/embeddings")
+            .uri("/v1/embeddings")
             .method(http::Method::POST)
             .header("content-type", "application/json")
             .header("x-request-id", "test-request-id")
@@ -397,7 +397,7 @@ mod tests {
         };
 
         let request = Request::builder()
-            .uri("/embeddings")
+            .uri("/v1/embeddings")
             .method(http::Method::POST)
             .header("content-type", "application/json")
             .header("x-request-id", "test-request-id")
