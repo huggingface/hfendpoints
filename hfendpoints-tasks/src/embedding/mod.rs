@@ -16,7 +16,7 @@ pub enum TruncationDirection {
 }
 
 #[cfg_attr(debug_assertions, derive(Debug))]
-#[cfg_attr(feature = "python", derive(IntoPyObjectRef))]
+#[cfg_attr(feature = "python", derive(IntoPyObject, IntoPyObjectRef))]
 #[derive(Clone, Deserialize, Serialize, ToSchema)]
 #[serde(untagged)]
 #[derive(PartialEq)]
@@ -46,6 +46,9 @@ pub struct EmbeddingParams {
 
     /// If truncate is set to `true` indicate if we should truncate on the left or on the right side of the sentence(s).
     pub truncation_direction: Option<TruncationDirection>,
+
+    /// The size of the output vector if the model supports Matryoshka embeddings
+    pub dimension: Option<usize>,
 }
 
 impl EmbeddingParams {
@@ -54,12 +57,14 @@ impl EmbeddingParams {
         prompt_name: Option<String>,
         truncate: Option<bool>,
         truncation_direction: Option<TruncationDirection>,
+        dimension: Option<usize>,
     ) -> Self {
         Self {
             normalize,
             prompt_name,
             truncate,
             truncation_direction,
+            dimension,
         }
     }
 }
@@ -85,7 +90,7 @@ pub mod python {
     use hfendpoints_binding_python::ImportablePyModuleBuilder;
     use numpy::{PyArray1, PyArray2, PyArrayMethods, PyUntypedArrayMethods};
     use pyo3::prelude::*;
-    use pyo3::types::PyList;
+    use pyo3::types::{PyDict, PyList};
     use pyo3::IntoPyObjectExt;
 
     #[pyclass(name = "EmbeddingRequest", frozen)]
@@ -103,16 +108,16 @@ pub mod python {
         }
 
         #[getter]
-        fn input<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-            match &self.0.inputs {
+        fn inputs<'py>(slf: PyRef<'_, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+            match &slf.0.inputs {
                 MaybeBatched::Single(item) => item.into_bound_py_any(py),
                 MaybeBatched::Batch(items) => items.into_bound_py_any(py),
             }
         }
 
         #[getter]
-        fn parameters<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-            py.None().into_bound_py_any(py)
+        fn parameters<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+            self.0.parameters.clone().into_pyobject(py)
         }
     }
 
@@ -137,10 +142,14 @@ pub mod python {
         ///
         /// Returns: Result<PyEmbeddingResponse, PyErr>
         #[new]
-        fn new(embeddings: Bound<'_, PyList>, num_tokens: usize) -> PyResult<Self> {
+        fn new(
+            embeddings: Bound<'_, PyList>,
+            prompt_tokens: usize,
+            num_tokens: usize,
+        ) -> PyResult<Self> {
             Ok(Self(EndpointResponse {
                 output: embeddings.extract()?,
-                usage: Some(Usage::same(num_tokens)),
+                usage: Some(Usage::new(prompt_tokens, num_tokens)),
             }))
         }
 

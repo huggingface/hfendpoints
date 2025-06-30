@@ -104,6 +104,7 @@ pub struct OpenAiEmbeddingRequest {
     model: Option<String>,
     dimension: Option<usize>,
     user: Option<String>,
+    prompt_name: Option<String>,
 }
 
 type OpenAiEmbeddingRequestWithContext = RequestWithContext<OpenAiEmbeddingRequest>;
@@ -162,7 +163,7 @@ impl TryFrom<OpenAiEmbeddingRequest> for EmbeddingRequest {
     fn try_from(value: OpenAiEmbeddingRequest) -> Result<Self, Self::Error> {
         Ok(Self::new(
             value.input,
-            EmbeddingParams::new(Some(true), None, None, None),
+            EmbeddingParams::new(Some(true), value.prompt_name, None, None, value.dimension),
         ))
     }
 }
@@ -269,6 +270,7 @@ mod tests {
             dimension: None,
             encoding_format: EncodingFormat::Float,
             user: None,
+            prompt_name: None,
         };
 
         // Create a test response
@@ -394,6 +396,7 @@ mod tests {
             dimension: None,
             encoding_format: EncodingFormat::Float,
             user: None,
+            prompt_name: None,
         };
 
         let request = Request::builder()
