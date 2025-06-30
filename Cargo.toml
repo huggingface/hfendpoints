@@ -12,10 +12,10 @@ members = [
 [workspace.dependencies]
 axum = "0.8"
 axum-extra = "0.10.1"
-pyo3 = { version = "0.24.2", features = ["abi3-py312", "experimental-async"] }
-pyo3-async-runtimes = { version = "0.24", features = ["attributes", "tokio-runtime"] }
+pyo3 = { version = "0.25.0", features = ["abi3-py312", "experimental-async"] }
+pyo3-async-runtimes = { version = "0.25.0", features = ["attributes", "tokio-runtime"] }
 serde = "1.0"
-tokio = { version = "1.44", default-features = false, features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.45", default-features = false, features = ["rt-multi-thread", "macros"] }
 tracing = "0.1.41"
 utoipa = "5.3.1"
 utoipa-axum = "0.2.0"
