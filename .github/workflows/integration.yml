@@ -51,18 +51,18 @@ jobs:
         run: echo "COMMIT_ID=${COMMIT_ID}" >> "$GITHUB_ENV"
 
       - name: "Setup Python"
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: '3.12'
 
       - name: "Checkout"
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: "Install hfjobs"
         run: python3 -m pip install hfjobs huggingface_hub
 
       - name: "Install hf endpoints CLI"
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           repository: huggingface/hf-cli
           path: "./hfcli"
@@ -70,11 +70,11 @@ jobs:
           ref: 'main'
           token: ${{ secrets.HUGGINGFACE_CLI_TOKEN }}
 
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions-rust-lang/setup-rust-toolchain@150fca883cd4034361b621bd4e6a9d34e5143606  # v1
       - name: "Generate lockfile for hf endpoints CLI"
         run: cd ./hfcli && cargo generate-lockfile
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: |
             ~/.cargo/bin/
@@ -112,20 +112,20 @@ jobs:
         run: echo "Found .hfjobs folder"
 
       - name: "Docker login"
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
       - name: "Extract metadata information"
         id: metadata
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5
         with:
           images: huggingface/hfendpoints-sdk
 
       - name: "Build SDK container"
         id: build_container_sdk
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
         with:
           push: false
           tags: ${{ format('huggingface/hfendpoints-sdk:{0}', env.COMMIT_ID) }}
@@ -135,7 +135,7 @@ jobs:
         id: build_container_endpoint
         env:
           ENDPOINT_REPO_SHA: "latest"
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
         with:
           context: ${{ env.ENDPOINT_REPO_PATH }}
           push: true
@@ -167,7 +167,7 @@ jobs:
         id: build_container_test_runner
         if: ${{ steps.deploy_endpoint.outcome == 'success' }}
         continue-on-error: true
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
         with:
           context: ${{ env.ENDPOINT_REPO_PATH }}
           file: ${{ format('{0}/Dockerfile', env.ENDPOINT_REPO_HFJOBS_FOLDER_PATH) }}

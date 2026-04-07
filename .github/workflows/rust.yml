@@ -29,12 +29,12 @@ jobs:
     name: fmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
         with:
           components: rustfmt
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2
 
       # Check fmt
       - name: "rustfmt --check"
@@ -44,12 +44,12 @@ jobs:
     name: clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2
       # Run clippy
       - name: "clippy --all"
         run: cargo clippy --all --tests --all-features --no-deps
@@ -64,12 +64,12 @@ jobs:
   #          - os: ubuntu-latest
   #
   #    steps:
-  #      - uses: actions/checkout@v4
+  #      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
   #      - name: Install Rust ${{ env.rust_nightly }}
-  #        uses: dtolnay/rust-toolchain@stable
+  #        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
   #        with:
   #          toolchain: ${{ env.rust_nightly }}
-  #      - uses: Swatinem/rust-cache@v2
+  #      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2
   #      - name: "doc --lib --all-features"
   #        run: |
   #          cargo doc --lib --no-deps --all-features --document-private-items
@@ -86,10 +86,10 @@ jobs:
         python: [ 3.12, 3.13 ]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: ${{ matrix.python }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - name: Build
         run: cargo build --verbose
       - name: Run tests
