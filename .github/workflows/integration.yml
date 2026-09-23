@@ -7,15 +7,16 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-build
   cancel-in-progress: true
 
-permissions:
-  contents: read
 
 # Define global environment variables
 env:
   HF_TOKEN: ${{ secrets.HUB_HFENDPOINTS_IMAGES_ORG_TOKEN }}
 
+permissions: {}
+
 jobs:
   build_target_matrix:
+    permissions: {}
     outputs:
       repositories: ${{ steps.extract.outputs.repositories }}
 
@@ -36,6 +37,8 @@ jobs:
           echo "repositories=${REPOSITORIES_JSON_OBJECT}" >> "$GITHUB_OUTPUT"
 
   deploy:
+    permissions:
+      contents: read
     runs-on:
       group: aws-general-8-plus
     needs: build_target_matrix
